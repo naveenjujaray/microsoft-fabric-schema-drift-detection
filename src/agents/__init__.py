@@ -37,6 +37,7 @@ def run_agent(
     user_input: str,
     context: "ToolContext",
     llm_config: dict | None = None,
+    max_turns: int | None = None,
 ) -> AgentResult:
     """Run one named agent to completion.
 
@@ -47,4 +48,4 @@ def run_agent(
     spec = AGENT_SPECS[name]
     registry = build_registry(context, allowed=spec.tools)
     runtime = make_runtime(llm_config or {}, registry)
-    return runtime.run(spec, user_input)
+    return runtime.run(spec, user_input, max_turns=max_turns)

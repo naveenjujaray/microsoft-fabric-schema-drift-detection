@@ -10,11 +10,19 @@ from .backends.base import Layer, LayerSchema
 
 
 class SchemaStore:
-    """Persists per-layer schema baselines under a directory."""
+    """Persists per-layer schema baselines under a directory.
 
-    def __init__(self, directory: str | Path = ".baselines") -> None:
+    With ``keep_history=True`` (default) every save also archives a
+    timestamped copy under ``<dir>/history/`` so drift trends can be
+    analyzed later (see the ``historian`` agent).
+    """
+
+    def __init__(
+        self, directory: str | Path = ".baselines", keep_history: bool = True
+    ) -> None:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+        self.keep_history = keep_history
 
     def _path(self, layer: Layer) -> Path:
         return self.directory / f"{layer.value}.json"
@@ -26,7 +34,15 @@ class SchemaStore:
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "schema": schema.to_dict(),
         }
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        text = json.dumps(payload, indent=2)
+        path.write_text(text, encoding="utf-8")
+        if self.keep_history:
+            history = self.directory / "history"
+            history.mkdir(exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            (history / f"{schema.layer.value}-{stamp}.json").write_text(
+                text, encoding="utf-8"
+            )
         return path
 
     def save_all(self, schemas: dict[Layer, LayerSchema]) -> None:

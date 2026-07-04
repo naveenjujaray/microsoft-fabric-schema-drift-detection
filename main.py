@@ -169,6 +169,73 @@ def run_once(
     return sum(1 for d in drifts if d.severity.value == "critical")
 
 
+def run_agent_cli(
+    name: str,
+    task: str | None,
+    mode: str,
+    cfg: dict[str, Any],
+    allow_writes: bool,
+    max_turns: int | None,
+) -> int:
+    """Run one named agent and print its report."""
+    from rich.markup import escape
+
+    from src.agents import AGENT_SPECS, ToolContext, run_agent
+
+    spec = AGENT_SPECS.get(name)
+    if spec is None:
+        console.print(f"[red]Unknown agent:[/] {name}")
+        console.print("Available: " + ", ".join(sorted(AGENT_SPECS)))
+        return 2
+
+    task = task or spec.default_task
+    if not task:
+        console.print(
+            f"[red]Agent '{name}' needs --task[/] (no default task defined)."
+        )
+        return 2
+    if spec.needs_writes and not allow_writes:
+        console.print(
+            f"[yellow]Note:[/] '{name}' normally edits files/items; without "
+            "--allow-writes it will only produce a plan."
+        )
+
+    context = ToolContext.build(mode, cfg, allow_writes=allow_writes)
+    llm_cfg = dict(cfg.get("llm", {}))
+    result = run_agent(name, task, context, llm_cfg, max_turns=max_turns)
+
+    console.rule(f"[bold]agent: {name}")
+    console.print(escape(result.output))
+    console.rule()
+    console.print(
+        f"[bold]run:[/] success={result.success} turns={result.turns} "
+        f"tools={len(result.tool_calls)} "
+        f"tokens={result.input_tokens}+{result.output_tokens} "
+        f"stop={result.stop_reason}"
+    )
+    if result.log_path:
+        console.print(f"[bold]log:[/] {result.log_path}")
+    return 0 if result.success else 1
+
+
+def list_agents_cli() -> int:
+    from rich.table import Table
+
+    from src.agents import AGENT_SPECS
+
+    table = Table(title="Available agents (python main.py --agent <name>)")
+    table.add_column("agent", style="bold")
+    table.add_column("what it does")
+    table.add_column("writes?", justify="center")
+    for name, spec in sorted(AGENT_SPECS.items()):
+        table.add_row(name, spec.description, "yes" if spec.needs_writes else "-")
+    console.print(table)
+    console.print(
+        "Write agents only modify anything when run with [bold]--allow-writes[/]."
+    )
+    return 0
+
+
 def print_provisioning() -> None:
     script = Path("scripts/provision_fabric.sh")
     console.print(
@@ -193,6 +260,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="actually branch/commit/push and open the PR")
     parser.add_argument("--provision", action="store_true",
                         help="show Fabric provisioning steps")
+    parser.add_argument("--agent", metavar="NAME",
+                        help="run a tool-use agent (see --list-agents)")
+    parser.add_argument("--task", metavar="TEXT",
+                        help="task for --agent (falls back to the agent's default)")
+    parser.add_argument("--list-agents", action="store_true",
+                        help="list available agents and exit")
+    parser.add_argument("--allow-writes", action="store_true",
+                        help="let the agent use write tools (TMDL edits, "
+                             "fab create, git push)")
+    parser.add_argument("--max-turns", type=int, default=None,
+                        help="override the agent's turn cap")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -206,8 +284,21 @@ def main(argv: list[str] | None = None) -> int:
         print_provisioning()
         return 0
 
+    if args.list_agents:
+        return list_agents_cli()
+
     cfg = load_config(args.config)
     mode = args.mode or cfg.get("mode", "simulate")
+
+    if args.agent:
+        try:
+            return run_agent_cli(
+                args.agent, args.task, mode, cfg,
+                allow_writes=args.allow_writes, max_turns=args.max_turns,
+            )
+        except (ValueError, EnvironmentError) as exc:
+            console.print(f"[red]Configuration error:[/] {exc}")
+            return 2
 
     if args.baseline:
         capture_baseline(make_backend(mode, cfg), SchemaStore(

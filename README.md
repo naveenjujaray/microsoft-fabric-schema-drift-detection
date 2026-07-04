@@ -6,7 +6,8 @@
 with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack alerts.**
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-64%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-87%20passing-brightgreen.svg)](#-tests)
+[![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
 [![Claude](https://img.shields.io/badge/LLM-Claude-d97757.svg)](https://docs.claude.com/)
@@ -116,6 +117,37 @@ Exit codes: `0` clean · `1` critical drift (usable as a CI gate) · `2` config 
 Everything is configured in [config.yaml](config.yaml) (IDs, model, channels) +
 `.env` (secrets — see [.env.example](.env.example)). **No hardcoded IDs anywhere.**
 
+## 🤖 Agents — ten tool-use specialists
+
+Beyond the scheduled pipeline, ten Claude agents run **tool-use loops** over
+the same backends, differ and lineage graph — for interactive investigation,
+verified repair and operations:
+
+```bash
+python main.py --list-agents
+python main.py --agent lineage_qa --task "what breaks if silver.sales_orders.freight is dropped?"
+python main.py --agent fix_verify --allow-writes    # propose → apply → re-diff → retry
+```
+
+| Agent | Superpower |
+|---|---|
+| `fix_verify` ✏️ | repairs drift, then **re-runs the differ to prove the fix worked** — retries until green |
+| `drift_investigator` | rename vs drop+add verdicts backed by **data profiles**, not just heuristics |
+| `lineage_qa` | interactive *"what breaks if…"* / *"where does X come from"* answers |
+| `root_cause` | traces symptoms upstream; groups 10 breaks under 1 root cause |
+| `triage` | P1/P2/P3 fix queue ranked by blast radius + report criticality |
+| `migration_planner` | step-by-step reversible migration plans (plan only — no DDL tools) |
+| `pr_responder` ✏️ | reads reviewer comments on the auto-PR, adjusts edits, pushes follow-up |
+| `provisioner` ✏️ | drives the `fab` CLI, captures item GUIDs into config.yaml |
+| `historian` | mines archived baselines for drift trends + hotspot tables |
+| `notification_composer` | engineer-Slack vs executive-email framing of the same incident |
+
+**Production guard rails:** write tools hard-gated behind `--allow-writes`
+(✏️ agents plan-only otherwise) · sandboxed file/SQL access (SELECT-only,
+row-capped, `.env`/`.git` denied) · per-run turn + token budgets · JSONL
+transcript of every run in `.agent_runs/` · no key? clean offline result, never
+a crash. Full guide: [docs/AGENTS.md](docs/AGENTS.md).
+
 ## 🏭 Run it inside Fabric — notebook, pipeline, CI/CD
 
 The [`fabric/`](fabric) folder ships Fabric-native artifacts (Git-integration format):
@@ -163,6 +195,7 @@ credential as Fabric — one app registration, one auth stack (permissions:
 | Doc | Contents |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module map, data flow, design decisions |
+| [docs/AGENTS.md](docs/AGENTS.md) | the ten agents: tools, guard rails, examples, config |
 | [docs/FABRIC_SETUP.md](docs/FABRIC_SETUP.md) | verified `fab` CLI sequence to stand up the workspace + Graph permissions |
 | [docs/FABRIC_NATIVE.md](docs/FABRIC_NATIVE.md) | notebook / pipeline / `fab deploy` — running inside Fabric |
 | [docs/DEMO.md](docs/DEMO.md) | the simulate-mode demo, step by step |
@@ -170,8 +203,9 @@ credential as Fabric — one app registration, one auth stack (permissions:
 ## ✅ Tests
 
 ```bash
-pytest    # 64 tests: differ, lineage, auth methods, CLI wrapper (mocked),
-          # Claude (mocked), notification channels, local backend
+pytest    # 87 tests: differ, lineage, auth methods, agent runtime + tool
+          # guard rails (mocked), CLI wrapper (mocked), Claude (mocked),
+          # notification channels, local backend
 ```
 
 ## 📄 License
