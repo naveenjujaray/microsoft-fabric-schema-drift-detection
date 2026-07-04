@@ -31,10 +31,16 @@ from src.llm_reasoner import make_reasoner
 from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
 from src.schema_diff import DriftRecord, diff_all
-from src.schema_store import SchemaStore
+from src.schema_store import BaselineError, SchemaStore
 
 console = Console()
 logger = logging.getLogger("drift-detective")
+
+# process exit codes (documented in README)
+EXIT_CLEAN = 0
+EXIT_CRITICAL_DRIFT = 1
+EXIT_CONFIG_ERROR = 2
+EXIT_BASELINE_ERROR = 3
 
 
 def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
@@ -96,13 +102,24 @@ def run_once(
     backend = make_backend(mode, cfg)
     store = SchemaStore(cfg.get("baseline", {}).get("dir", ".baselines"))
 
+    # Baselines must exist and be complete. A missing baseline is NEVER
+    # silently recreated: recapturing would swallow whatever drifted since
+    # the file vanished. The operator must run --baseline explicitly.
     if not store.has_baselines():
-        console.print("[yellow]No baselines found - capturing initial snapshot; "
-                      "run again after schema changes.[/]")
-        capture_baseline(backend, store)
-        return 0
+        raise BaselineError(
+            f"no baselines found in {store.directory}/ - capture them "
+            "explicitly with:  python main.py --baseline"
+        )
 
     current = backend.get_all_schemas()
+    missing = store.missing_layers(current.keys())
+    if missing:
+        names = ", ".join(layer.value for layer in missing)
+        raise BaselineError(
+            f"baseline file(s) missing for layer(s): {names}. "
+            "Baselines are never recreated implicitly - if this is "
+            "intentional, re-capture with:  python main.py --baseline"
+        )
     baselines = store.load_all()
 
     graph = build_lineage_graph(
@@ -298,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         except (ValueError, EnvironmentError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
-            return 2
+            return EXIT_CONFIG_ERROR
 
     if args.baseline:
         capture_baseline(make_backend(mode, cfg), SchemaStore(
@@ -310,10 +327,13 @@ def main(argv: list[str] | None = None) -> int:
             criticals = run_once(
                 mode, cfg, dry_run=args.dry_run, open_pr=args.open_pr
             )
+        except BaselineError as exc:
+            console.print(f"[red]Baseline error:[/] {exc}")
+            return EXIT_BASELINE_ERROR
         except (ValueError, EnvironmentError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
-            return 2
-        return 1 if criticals else 0
+            return EXIT_CONFIG_ERROR
+        return EXIT_CRITICAL_DRIFT if criticals else EXIT_CLEAN
 
     parser.print_help()
     return 0
