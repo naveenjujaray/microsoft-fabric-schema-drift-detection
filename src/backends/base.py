@@ -45,7 +45,7 @@ class ColumnSchema:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ColumnSchema":
+    def from_dict(cls, d: dict[str, Any]) -> ColumnSchema:
         return cls(
             name=d["name"],
             dtype=d["dtype"],
@@ -74,7 +74,7 @@ class TableSchema:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "TableSchema":
+    def from_dict(cls, d: dict[str, Any]) -> TableSchema:
         return cls(
             name=d["name"],
             columns={
@@ -99,7 +99,7 @@ class LayerSchema:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "LayerSchema":
+    def from_dict(cls, d: dict[str, Any]) -> LayerSchema:
         return cls(
             layer=Layer(d["layer"]),
             tables={n: TableSchema.from_dict(t) for n, t in d.get("tables", {}).items()},

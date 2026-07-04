@@ -6,7 +6,7 @@ are generic; nothing else changes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,8 @@ replace per fix).""",
            "query_lineage", "git_status"),
     max_turns=20,
     needs_writes=True,
-    default_task="Detect current drift and repair everything auto-fixable, verifying after each fix.",
+    default_task=("Detect current drift and repair everything "
+                  "auto-fixable, verifying after each fix."),
 ))
 
 # 2 ------------------------------------------------------------------
@@ -105,7 +106,8 @@ and DAX only, and say so.""",
     tools=("run_diff", "get_schema", "profile_column", "sample_rows",
            "grep_dax", "query_lineage", "run_sql"),
     max_turns=15,
-    default_task="Investigate current drift and give evidence-backed verdicts for anything ambiguous.",
+    default_task=("Investigate current drift and give evidence-backed "
+                  "verdicts for anything ambiguous."),
 ))
 
 # 3 ------------------------------------------------------------------
@@ -161,7 +163,8 @@ group symptoms under their shared root.""",
     tools=("run_diff", "query_lineage", "list_lineage_nodes", "get_schema",
            "profile_column", "sample_rows", "grep_dax"),
     max_turns=15,
-    default_task="Trace every current cross-layer break to its root cause and group symptoms by root.",
+    default_task=("Trace every current cross-layer break to its root "
+                  "cause and group symptoms by root."),
 ))
 
 # 5 ------------------------------------------------------------------
@@ -332,5 +335,6 @@ You can only PREVIEW. Sending stays with the deterministic dispatcher.""",
     tools=("run_diff", "count_downstream_reports", "read_report_metadata",
            "preview_notification", "query_lineage"),
     max_turns=12,
-    default_task="Compose engineer (slack) and executive (outlook) notifications for the current drift.",
+    default_task=("Compose engineer (slack) and executive (outlook) "
+                  "notifications for the current drift."),
 ))

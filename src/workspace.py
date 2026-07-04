@@ -114,7 +114,7 @@ class WorkspaceRegistry:
 
     # ------------------------------------------------------------------
     @classmethod
-    def from_manifest(cls, manifest: dict[str, Any]) -> "WorkspaceRegistry":
+    def from_manifest(cls, manifest: dict[str, Any]) -> WorkspaceRegistry:
         tenant = str(manifest.get("tenant_id", ""))
         workspaces: list[WorkspaceInfo] = []
         for ws in manifest.get("workspaces", []):
@@ -176,7 +176,7 @@ class WorkspaceRegistry:
         return cls(workspaces=workspaces, links=links, tenant_id=tenant)
 
     @classmethod
-    def load(cls, path: str | Path) -> "WorkspaceRegistry":
+    def load(cls, path: str | Path) -> WorkspaceRegistry:
         path = Path(path)
         try:
             manifest = json.loads(path.read_text(encoding="utf-8"))

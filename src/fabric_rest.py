@@ -72,7 +72,7 @@ class FabricRest:
     def _backoff(self, attempt: int) -> float:
         """Exponential backoff with full jitter: base^attempt capped."""
         ceiling = min(self.backoff_base**attempt, _MAX_BACKOFF_SECONDS)
-        return random.uniform(0, ceiling)
+        return random.uniform(0, ceiling)  # noqa: S311 - jitter, not crypto
 
     def _send(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         """One request with retries for transient failures.
@@ -131,7 +131,7 @@ class FabricRest:
     # ------------------------------------------------------------------
     def list_items(self, workspace_id: str) -> list[dict[str, Any]]:
         resp = self._request("GET", f"workspaces/{workspace_id}/items")
-        return resp.json().get("value", [])
+        return list(resp.json().get("value", []))
 
     def list_lakehouse_tables(
         self, workspace_id: str, lakehouse_id: str
@@ -140,7 +140,7 @@ class FabricRest:
             "GET", f"workspaces/{workspace_id}/lakehouses/{lakehouse_id}/tables"
         )
         body = resp.json()
-        return body.get("data", body.get("value", []))
+        return list(body.get("data", body.get("value", [])))
 
     # ------------------------------------------------------------------
     def get_semantic_model_tmdl(
@@ -176,7 +176,7 @@ class FabricRest:
             time.sleep(wait)
             poll = self._send("GET", location)
             wait = _retry_after_seconds(poll, 5.0)
-            body = poll.json()
+            body: dict[str, Any] = poll.json()
             status = body.get("status")
             if status == "Failed":
                 raise FabricRestError(f"LRO failed: {body}")
@@ -184,7 +184,8 @@ class FabricRest:
                 # result may live at a /result suffix
                 try:
                     result = self._send("GET", f"{location.rstrip('/')}/result")
-                    return result.json()
+                    payload: dict[str, Any] = result.json()
+                    return payload
                 except FabricRestError:
                     return body
         raise FabricRestError(f"LRO polling timed out after {max_wait}s")
@@ -214,5 +215,8 @@ class FabricRest:
         )
         with pyodbc.connect(conn_str, timeout=self.timeout) as conn:
             cur = conn.cursor()
-            cur.execute(query, params) if params else cur.execute(query)
-            return cur.fetchall()
+            if params:
+                cur.execute(query, params)
+            else:
+                cur.execute(query)
+            return list(cur.fetchall())

@@ -54,7 +54,10 @@ class DriftAlert:
         crit = self.counts_by_severity["critical"]
         total = len(self.drifts)
         icon = "🔴" if crit else ("🟡" if total else "🟢")
-        return f"{icon} Schema drift: {total} change(s), {crit} critical ({self.environment})"
+        return (
+            f"{icon} Schema drift: {total} change(s), "
+            f"{crit} critical ({self.environment})"
+        )
 
 
 class NotificationChannel(ABC):

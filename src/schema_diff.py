@@ -152,7 +152,7 @@ def _precision_delta(old_dtype: str, new_dtype: str) -> str:
     width = max(len(o), len(n))
     o = o + (0,) * (width - len(o))
     n = n + (0,) * (width - len(n))
-    return "widen" if all(nn >= oo for oo, nn in zip(o, n)) else "narrow"
+    return "widen" if all(nn >= oo for oo, nn in zip(o, n, strict=True)) else "narrow"
 
 
 def _normalize_dax(expr: str) -> str:
@@ -397,8 +397,12 @@ def _diff_table(
     # column reorder: rank *shared* columns by position in each snapshot so
     # adds/drops shifting absolute ordinals don't create false positives.
     # Breaks positional consumers (SELECT *, positional CSV/parquet binding).
-    base_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: base_cols[x].ordinal))}
-    cur_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: cur_cols[x].ordinal))}
+    base_rank = {
+        n: i for i, n in enumerate(sorted(shared, key=lambda x: base_cols[x].ordinal))
+    }
+    cur_rank = {
+        n: i for i, n in enumerate(sorted(shared, key=lambda x: cur_cols[x].ordinal))
+    }
     for name in shared:
         if base_rank[name] != cur_rank[name]:
             drifts.append(

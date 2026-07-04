@@ -28,7 +28,10 @@ from __future__ import annotations
 import os
 import time
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover
+    from azure.core.credentials import AccessToken
 
 FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
@@ -57,9 +60,9 @@ class NotebookUtilsCredential:
 
     _TOKEN_TTL_GUESS = 3600  # getToken returns no expiry; assume 1h
 
-    def get_token(self, *scopes: str, **_: Any):
+    def get_token(self, *scopes: str, **_: Any) -> AccessToken:
+        import notebookutils
         from azure.core.credentials import AccessToken
-        import notebookutils  # type: ignore[import-not-found]
 
         # notebookutils expects an audience, not a ".default" scope
         audience = scopes[0].removesuffix("/.default") if scopes else FABRIC_SCOPE
@@ -87,7 +90,7 @@ def _client_secret_credential():
     client = os.environ.get("AZURE_CLIENT_ID", "")
     secret = os.environ.get("AZURE_CLIENT_SECRET", "")
     if not (tenant and client and secret):
-        raise EnvironmentError(
+        raise OSError(
             "AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET must be "
             "set (see .env.example) for live Fabric or Graph access — or set "
             "FABRIC_AUTH_METHOD=managed_identity|notebookutils|default when "
@@ -122,4 +125,4 @@ def get_credential():
 
 def get_token(scope: str) -> str:
     """Bearer token for the given scope."""
-    return get_credential().get_token(scope).token
+    return str(get_credential().get_token(scope).token)

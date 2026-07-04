@@ -21,7 +21,7 @@ from rich.console import Console
 # Windows consoles often default to cp1252; drift output uses unicode.
 if hasattr(sys.stdout, "reconfigure"):  # pragma: no cover
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 
 from src.backends.base import Layer, SchemaBackend
 from src.config import load_config
@@ -328,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.agent, args.task, mode, cfg,
                 allow_writes=args.allow_writes, max_turns=args.max_turns,
             )
-        except (ValueError, EnvironmentError) as exc:
+        except (OSError, ValueError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
             return EXIT_CONFIG_ERROR
 
@@ -345,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         except BaselineError as exc:
             console.print(f"[red]Baseline error:[/] {exc}")
             return EXIT_BASELINE_ERROR
-        except (ValueError, EnvironmentError) as exc:
+        except (OSError, ValueError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
             return EXIT_CONFIG_ERROR
         return EXIT_CRITICAL_DRIFT if criticals else EXIT_CLEAN

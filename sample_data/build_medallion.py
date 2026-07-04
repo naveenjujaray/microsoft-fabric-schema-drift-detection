@@ -251,7 +251,8 @@ def write_reports(out_dir: Path = GENERATED_DIR) -> Path:
                     {"table": "Customer", "field": "CompanyName", "kind": "column"},
                     {"table": "Customer", "field": "Email", "kind": "column"},
                     {"table": "Sales", "field": "Total Revenue", "kind": "measure"},
-                    {"table": "Sales", "field": "Revenue incl Freight", "kind": "measure"},
+                    {"table": "Sales", "field": "Revenue incl Freight",
+                     "kind": "measure"},
                 ],
             },
             {

@@ -258,4 +258,5 @@ class GitHandler:
             timeout=30,
         )
         resp.raise_for_status()
-        return resp.json().get("html_url")
+        url = resp.json().get("html_url")
+        return str(url) if url else None

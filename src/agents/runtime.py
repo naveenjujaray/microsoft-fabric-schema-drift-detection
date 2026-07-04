@@ -90,7 +90,7 @@ class AgentRuntime:
 
     def __init__(
         self,
-        registry: "ToolRegistry",
+        registry: ToolRegistry,
         model: str = DEFAULT_MODEL,
         max_tokens_per_call: int = 4096,
         max_total_tokens: int = 200_000,
@@ -130,7 +130,7 @@ class AgentRuntime:
         return _go()
 
     # ------------------------------------------------------------------
-    def run(self, spec: "AgentSpec", user_input: str,
+    def run(self, spec: AgentSpec, user_input: str,
             max_turns: int | None = None) -> AgentResult:
         """Tool-use loop: call model, execute tools, repeat until done."""
         turn_cap = max_turns or spec.max_turns
@@ -219,10 +219,10 @@ class MockAgentRuntime:
     task) so demos, tests and CI never crash on a missing key.
     """
 
-    def __init__(self, registry: "ToolRegistry") -> None:
+    def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
-    def run(self, spec: "AgentSpec", user_input: str,
+    def run(self, spec: AgentSpec, user_input: str,
             max_turns: int | None = None) -> AgentResult:
         return AgentResult(
             agent=spec.name,
@@ -237,7 +237,9 @@ class MockAgentRuntime:
         )
 
 
-def make_runtime(llm_config: dict[str, Any], registry: "ToolRegistry"):
+def make_runtime(
+    llm_config: dict[str, Any], registry: ToolRegistry
+) -> AgentRuntime | MockAgentRuntime:
     """Real runtime when a key exists, mock otherwise."""
     agents_cfg = llm_config.get("agents", {}) if "agents" in llm_config else {}
     if not os.environ.get("ANTHROPIC_API_KEY"):

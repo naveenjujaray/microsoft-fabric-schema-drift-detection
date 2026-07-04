@@ -22,9 +22,10 @@ import json
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ..backends.base import Layer, SchemaBackend
 from ..lineage import LineageGraph
@@ -71,14 +72,17 @@ class ToolContext:
     def db_path(self) -> Path | None:
         if self.mode != "simulate":
             return None
-        return self.repo_dir / self.cfg.get("simulate", {}).get(
-            "db_path", "sample_data/warehouse.duckdb"
+        rel = str(
+            self.cfg.get("simulate", {}).get(
+                "db_path", "sample_data/warehouse.duckdb"
+            )
         )
+        return self.repo_dir / rel
 
     @classmethod
     def build(
         cls, mode: str, cfg: dict[str, Any], allow_writes: bool = False
-    ) -> "ToolContext":
+    ) -> ToolContext:
         """Assemble backend + baselines + lineage graph for agent use."""
         # local import avoids a circular import with main.py
         from ..medallion import build_lineage_graph
@@ -403,8 +407,9 @@ def build_registry(
         try:
             rel = f"{_qident(layer)}.{_qident(table)}"
             col = _qident(column)
+            # identifiers validated+quoted by _qident; connection read-only
             row = con.execute(
-                f"SELECT count(*), count(DISTINCT {col}), "
+                f"SELECT count(*), count(DISTINCT {col}), "  # noqa: S608
                 f"count(*) - count({col}), min({col}), max({col}) FROM {rel}"
             ).fetchone()
         finally:
@@ -435,7 +440,8 @@ def build_registry(
         con = _duckdb()
         try:
             rel = f"{_qident(layer)}.{_qident(table)}"
-            cur = con.execute(f"SELECT * FROM {rel} LIMIT {limit}")
+            # identifiers validated+quoted by _qident; limit is int-clamped
+            cur = con.execute(f"SELECT * FROM {rel} LIMIT {limit}")  # noqa: S608
             cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
         finally:
@@ -463,7 +469,8 @@ def build_registry(
             return "ERROR: query contains a forbidden keyword (read-only tool)"
         con = _duckdb()
         try:
-            cur = con.execute(f"SELECT * FROM ({q}) LIMIT 200")
+            # q is keyword-filtered SELECT/WITH only, read-only connection
+            cur = con.execute(f"SELECT * FROM ({q}) LIMIT 200")  # noqa: S608
             cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
         finally:
@@ -691,7 +698,8 @@ def build_registry(
             cwd=ctx.repo_dir, capture_output=True, text=True, timeout=60,
         )
         if commit.returncode != 0:
-            return f"ERROR: git commit failed: {commit.stderr.strip() or commit.stdout.strip()}"
+            detail = commit.stderr.strip() or commit.stdout.strip()
+            return f"ERROR: git commit failed: {detail}"
         push = subprocess.run(
             ["git", "push"],
             cwd=ctx.repo_dir, capture_output=True, text=True, timeout=120,

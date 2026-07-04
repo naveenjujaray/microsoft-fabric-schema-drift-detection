@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict, deque
-from typing import TYPE_CHECKING, Iterable
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from .backends.base import Layer, LayerSchema
 from .schema_diff import DriftRecord, DriftType, Severity
@@ -175,7 +176,7 @@ def _split_target(target: str) -> tuple[Layer, str, str | None]:
 def annotate_downstream(
     drifts: list[DriftRecord],
     graph: LineageGraph,
-    workspaces: "WorkspaceRegistry | None" = None,
+    workspaces: WorkspaceRegistry | None = None,
 ) -> list[DriftRecord]:
     """Fill ``downstream_impact`` on each drift and synthesize break
     records for impacted nodes in *other* layers.
@@ -232,15 +233,12 @@ def annotate_downstream(
             tgt_ws = (
                 workspaces.workspace_for_layer(tgt_layer) if workspaces else None
             )
-            crosses_workspace = (
-                src_ws is not None
+            if (
+                workspaces is not None
+                and src_ws is not None
                 and tgt_ws is not None
                 and src_ws.workspace_id != tgt_ws.workspace_id
-            )
-
-            if crosses_workspace:
-                assert src_ws is not None and tgt_ws is not None
-                assert workspaces is not None
+            ):
                 link = workspaces.link_between(drift.layer, tgt_layer)
                 via = f" via {link.link_type}" if link else ""
                 tenant_note = (

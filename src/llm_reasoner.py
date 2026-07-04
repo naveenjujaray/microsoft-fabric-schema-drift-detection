@@ -57,13 +57,17 @@ def parse_llm_json(text: str) -> dict[str, Any]:
     """
     cleaned = _JSON_FENCE.sub("", text).strip()
     try:
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
         pass
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start != -1 and end > start:
         try:
-            return json.loads(cleaned[start : end + 1])
+            parsed = json.loads(cleaned[start : end + 1])
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
             pass
     logger.warning("LLM returned unparseable JSON; using empty result")
@@ -85,7 +89,7 @@ def _lineage_json(drifts: list[DriftRecord]) -> str:
     )
 
 
-def _workspace_json(workspaces: "WorkspaceRegistry | None") -> str:
+def _workspace_json(workspaces: WorkspaceRegistry | None) -> str:
     """Compact topology description for the impact prompt."""
     if workspaces is None:
         return "{}"
@@ -169,7 +173,7 @@ class ClaudeReasoner:
         max_tokens: int = 4096,
         max_retries: int = 3,
         api_key: str | None = None,
-        workspaces: "WorkspaceRegistry | None" = None,
+        workspaces: WorkspaceRegistry | None = None,
     ) -> None:
         import anthropic
 
@@ -232,7 +236,7 @@ class ClaudeReasoner:
 class MockReasoner:
     """Deterministic reasoner for demos/tests: no API key, no network."""
 
-    def __init__(self, workspaces: "WorkspaceRegistry | None" = None) -> None:
+    def __init__(self, workspaces: WorkspaceRegistry | None = None) -> None:
         self.workspaces = workspaces
 
     def analyze_impact(self, drifts: list[DriftRecord]) -> dict[str, Any]:
@@ -343,7 +347,7 @@ class MockReasoner:
 
 def make_reasoner(
     llm_config: dict[str, Any],
-    workspaces: "WorkspaceRegistry | None" = None,
+    workspaces: WorkspaceRegistry | None = None,
 ) -> Reasoner:
     """Factory: Claude if enabled + key present, else the mock."""
     enabled = llm_config.get("enabled", True)

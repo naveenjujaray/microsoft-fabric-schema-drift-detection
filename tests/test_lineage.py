@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.backends.base import Layer, LayerSchema, TableSchema, ColumnSchema
+from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
 from src.lineage import LineageGraph, annotate_downstream, node_id
 from src.schema_diff import DriftRecord, DriftType, Severity
 

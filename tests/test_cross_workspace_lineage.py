@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
+from src.backends.base import ColumnSchema, Layer
 from src.lineage import LineageGraph, annotate_downstream
 from src.llm_reasoner import CROSS_WORKSPACE_SENTENCE, MockReasoner
 from src.schema_diff import DriftRecord, DriftType, Severity, diff_layer
