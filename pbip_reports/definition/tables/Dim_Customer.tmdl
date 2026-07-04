@@ -1,0 +1,22 @@
+table Dim_Customer
+
+	column CustomerKey
+		dataType: int64
+		isKey
+		sourceColumn: customer_id
+
+	column FirstName
+		dataType: string
+		sourceColumn: first_name
+
+	column LastName
+		dataType: string
+		sourceColumn: last_name
+
+	column CompanyName
+		dataType: string
+		sourceColumn: company_name
+
+	column Email
+		dataType: string
+		sourceColumn: email

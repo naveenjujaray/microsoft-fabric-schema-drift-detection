@@ -1,0 +1,87 @@
+{
+  "properties": {
+    "description": "Nightly schema-drift check: runs the DriftDetection notebook with the workspace identity, then fails the pipeline run if critical drift was detected (notebook exit value > 0).",
+    "activities": [
+      {
+        "name": "RunDriftDetection",
+        "type": "TridentNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookId": "7f3c1a52-9d4e-4b8a-a1c6-2e5d8f907b31",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {
+            "REPO_URL": {
+              "value": "@pipeline().parameters.repo_url",
+              "type": "string"
+            },
+            "REPO_REF": {
+              "value": "@pipeline().parameters.repo_ref",
+              "type": "string"
+            },
+            "WORKSPACE_ID": {
+              "value": "@pipeline().parameters.workspace_id",
+              "type": "string"
+            },
+            "DRY_RUN": {
+              "value": "@pipeline().parameters.dry_run",
+              "type": "bool"
+            }
+          }
+        }
+      },
+      {
+        "name": "CheckForCriticalDrift",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "RunDriftDetection",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(int(coalesce(activity('RunDriftDetection').output.result.exitValue, '0')), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FailOnCriticalDrift",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "Critical schema drift detected - see DriftDetection notebook run output and the team notifications.",
+                "errorCode": "SchemaDriftCritical"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ],
+    "parameters": {
+      "repo_url": {
+        "type": "string",
+        "defaultValue": "https://github.com/your-org/microsoft-fabric-schema-drift-detection.git"
+      },
+      "repo_ref": {
+        "type": "string",
+        "defaultValue": "main"
+      },
+      "workspace_id": {
+        "type": "string",
+        "defaultValue": "00000000-0000-0000-0000-000000000000"
+      },
+      "dry_run": {
+        "type": "bool",
+        "defaultValue": true
+      }
+    },
+    "annotations": ["schema-drift", "governance"]
+  }
+}

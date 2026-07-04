@@ -1,0 +1,15 @@
+# fabric-cicd parameterization: rewrites environment-specific values inside
+# item definitions at publish time.
+# Docs: microsoft.github.io/fabric-cicd (find_replace section)
+#
+# The pipeline's Notebook activity references the DriftDetection notebook by
+# its logicalId; fabric-cicd resolves workspace/item ids automatically for
+# items it deploys together. The placeholder workspace GUID below is replaced
+# per environment.
+
+find_replace:
+  - find_value: "00000000-0000-0000-0000-000000000000"
+    replace_value:
+      PROD: "<YOUR_WORKSPACE_ID>"
+      # DEV: "<DEV_WORKSPACE_ID>"
+      # TEST: "<TEST_WORKSPACE_ID>"

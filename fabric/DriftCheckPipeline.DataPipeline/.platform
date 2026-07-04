@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "DataPipeline",
+    "displayName": "DriftCheckPipeline",
+    "description": "Orchestrates the DriftDetection notebook on a schedule; fails the run when critical schema drift is found."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "b4e8d2c7-6f1a-4e3d-9a5b-8c0f4d217e96"
+  }
+}

@@ -1,0 +1,24 @@
+# Fabric CI/CD deployment config for `fab deploy` (fabric-cicd under the hood).
+# Verified format: learn.microsoft.com/fabric/cicd/tutorial-fabric-cicd-local
+#
+# Usage:
+#   pip install --upgrade ms-fabric-cli     # deploy command needs a recent CLI
+#   fab auth login
+#   cd fabric
+#   fab deploy --config deploy-config.yml
+#
+# Publishes DriftDetection.Notebook and DriftCheckPipeline.DataPipeline into
+# the target workspace (and unpublishes items removed from this folder).
+# Replace <YOUR_WORKSPACE_ID> before deploying, or template it per
+# environment in your CD pipeline.
+
+core:
+  workspace_id: "<YOUR_WORKSPACE_ID>"
+  repository_directory: "."
+  # only ship the drift-detective items; ignores anything else
+  item_types_in_scope:
+    - Notebook
+    - DataPipeline
+
+# Optional: parameter.yml in this folder rewrites environment-specific values
+# (workspace GUID inside pipeline-content.json) at publish time.

@@ -1,0 +1,14 @@
+[project]
+name = "fabric-schema-drift-detective"
+version = "0.1.0"
+description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 90

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "DriftDetection",
+    "description": "Runs the Fabric Schema Drift Detective inside the workspace using the notebook identity (no secrets)."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "7f3c1a52-9d4e-4b8a-a1c6-2e5d8f907b31"
+  }
+}

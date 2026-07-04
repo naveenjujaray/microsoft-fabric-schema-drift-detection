@@ -1,0 +1,69 @@
+# Fabric Schema Drift Detective - configuration
+# Secrets NEVER go here. They live in .env (see .env.example).
+# ${VAR} placeholders are resolved from environment at load time.
+
+mode: simulate            # simulate | live  (CLI --mode overrides)
+
+fabric:
+  # auth: client_secret (SPN via .env) | managed_identity (Azure compute)
+  #       | notebookutils (inside a Fabric notebook) | default (full chain)
+  # empty = auto-detect (notebookutils inside Fabric, else client_secret)
+  auth_method: ""
+  workspace_id: ""        # GUID of the Fabric workspace
+  lakehouse_id: ""        # Bronze+Silver lakehouse item id
+  warehouse_id: ""        # Gold warehouse item id
+  semantic_model_id: ""   # semantic model item id
+  dataflow_ids: []        # Dataflow Gen2 item ids
+  pipeline_ids: []        # Data pipeline item ids
+  api_base: "https://api.fabric.microsoft.com/v1"
+  # SQL analytics endpoint (optional, for direct schema queries)
+  sql_endpoint: ""
+  sql_database: ""
+
+simulate:
+  db_path: "sample_data/warehouse.duckdb"
+  semantic_model_path: "sample_data/generated/semantic_model.json"
+  reports_path: "sample_data/generated/reports.json"
+
+baseline:
+  dir: ".baselines"       # where per-layer schema snapshots are stored
+
+llm:
+  provider: anthropic
+  model: "claude-opus-4-6"   # override freely
+  max_tokens: 4096
+  max_retries: 3
+  # set to false to use the deterministic mock reasoner (no API calls)
+  enabled: true
+
+git:
+  reports_dir: "pbip_reports"   # folder containing PBIP / TMDL sources
+  remote: "origin"
+  base_branch: "main"
+  branch_prefix: "drift-fix/"
+  # pr via `gh` CLI if available, else GitHub REST using GITHUB_TOKEN + GITHUB_REPO
+  use_gh_cli: true
+
+notifications:
+  teams:
+    enabled: false
+    mode: webhook          # webhook | graph
+    webhook_url: ${TEAMS_WEBHOOK}
+    team_id: ""            # if mode=graph
+    channel_id: ""         # if mode=graph
+  outlook:
+    enabled: false
+    mode: graph            # graph | smtp
+    sender: "alerts@company.com"
+    to: ["data-team@company.com"]
+    cc: []
+    smtp_host: ""
+    smtp_port: 587
+  slack:
+    enabled: false
+    mode: webhook          # webhook | bot
+    webhook_url: ${SLACK_WEBHOOK}
+    bot_token: ${SLACK_BOT_TOKEN}
+    channel: "#data-alerts"
+  console:
+    enabled: true          # rich console output, always safe

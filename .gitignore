@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.baselines/
+sample_data/warehouse.duckdb
+sample_data/generated/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
