@@ -122,7 +122,14 @@ class ToolContext:
 
     # ------------------------------------------------------------------
     def safe_path(self, rel: str, root: Path | None = None) -> Path:
-        """Resolve ``rel`` inside ``root`` (default repo); raise on escape."""
+        """Resolve ``rel`` inside ``root`` (default repo); raise on escape.
+
+        Also rejects absolute paths and any symlink component - a
+        symlink inside the sandbox could otherwise redirect writes to
+        an arbitrary location.
+        """
+        if Path(rel).is_absolute():
+            raise PermissionError(f"absolute paths not allowed: {rel}")
         root = (root or self.repo_dir).resolve()
         path = (root / rel).resolve()
         if not path.is_relative_to(root):
@@ -130,6 +137,11 @@ class ToolContext:
         parts = {p.lower() for p in path.parts}
         if ".env" in parts or ".git" in parts:
             raise PermissionError(f"access to {rel} denied")
+        probe = root
+        for part in path.relative_to(root).parts:
+            probe = probe / part
+            if probe.is_symlink():
+                raise PermissionError(f"symlink in path not allowed: {rel}")
         return path
 
 
@@ -483,6 +495,10 @@ def build_registry(
         p = ctx.safe_path(file, root=ctx.reports_dir)
         if not p.exists():
             return f"ERROR: {file} not found under {ctx.reports_dir.name}/"
+        if not p.is_file():
+            return f"ERROR: {file} is not a regular file"
+        if p.stat().st_size > 5 * 1024 * 1024:
+            return f"ERROR: {file} exceeds the 5MB edit limit"
         text = p.read_text(encoding="utf-8")
         count = text.count(find)
         if count == 0:
