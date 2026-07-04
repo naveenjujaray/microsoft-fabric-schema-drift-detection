@@ -5,8 +5,9 @@ and emits typed ``DriftRecord`` objects. Cross-layer breaks are added
 afterwards by ``lineage.annotate_downstream`` using the lineage graph.
 
 Drift types:
-    column_drop, column_add, type_change, column_rename,
-    nullability_change, table_drop, table_add, key_change,
+    column_drop, column_add, type_change, precision_scale_change,
+    column_rename, column_reorder, nullability_change, table_drop,
+    table_add, key_change, measure_drop, measure_add, measure_change,
     cross_layer_break
 """
 
@@ -24,11 +25,16 @@ class DriftType(str, Enum):
     COLUMN_DROP = "column_drop"
     COLUMN_ADD = "column_add"
     TYPE_CHANGE = "type_change"
+    PRECISION_SCALE_CHANGE = "precision_scale_change"
     COLUMN_RENAME = "column_rename"
+    COLUMN_REORDER = "column_reorder"
     NULLABILITY_CHANGE = "nullability_change"
     TABLE_DROP = "table_drop"
     TABLE_ADD = "table_add"
     KEY_CHANGE = "key_change"
+    MEASURE_DROP = "measure_drop"
+    MEASURE_ADD = "measure_add"
+    MEASURE_CHANGE = "measure_change"
     CROSS_LAYER_BREAK = "cross_layer_break"
 
 
@@ -101,6 +107,56 @@ def _cast_is_safe(old: str, new: str) -> bool:
     if o == n:
         return True
     return (o, n) in _SAFE_CASTS
+
+
+def _type_params(dtype: str) -> tuple[int, ...]:
+    """Parse precision/scale/length: 'DECIMAL(19,4)'->(19,4), 'VARCHAR(50)'->(50,).
+
+    Returns () for unparameterized types (INTEGER) and for non-numeric
+    parameters (VARCHAR(MAX)), which are treated as *unbounded* below.
+    """
+    lp = dtype.find("(")
+    if lp == -1:
+        return ()
+    rp = dtype.find(")", lp)
+    if rp == -1:
+        return ()
+    parts = [p.strip() for p in dtype[lp + 1 : rp].split(",") if p.strip()]
+    out: list[int] = []
+    for p in parts:
+        if not p.isdigit():
+            return ()  # e.g. VARCHAR(MAX) -> unbounded
+        out.append(int(p))
+    return tuple(out)
+
+
+def _precision_delta(old_dtype: str, new_dtype: str) -> str:
+    """'same' | 'widen' | 'narrow' for two same-base-type declarations.
+
+    Empty params = unbounded/unknown. Bounded->unbounded widens capacity;
+    unbounded->bounded narrows it; otherwise compare element-wise.
+    """
+    o, n = _type_params(old_dtype), _type_params(new_dtype)
+    if o == n:
+        return "same"
+    if not o and n:
+        return "narrow"   # unbounded -> bounded loses capacity
+    if o and not n:
+        return "widen"    # bounded -> unbounded gains capacity
+    width = max(len(o), len(n))
+    o = o + (0,) * (width - len(o))
+    n = n + (0,) * (width - len(n))
+    return "widen" if all(nn >= oo for oo, nn in zip(o, n)) else "narrow"
+
+
+def _normalize_dax(expr: str) -> str:
+    """Strip whitespace so formatting/reindent edits aren't flagged as drift.
+
+    DAX whitespace is insignificant outside string literals, so comparing
+    whitespace-free forms catches semantic changes while ignoring the TMDL
+    reformatting that Power BI Desktop applies on every save.
+    """
+    return "".join(expr.split())
 
 
 def _name_similarity(a: str, b: str) -> float:
@@ -197,8 +253,9 @@ def _diff_table(
             )
         )
 
-    # shared columns: type / nullability / key changes
-    for name in base_cols.keys() & cur_cols.keys():
+    # shared columns: type / precision / nullability / key changes
+    shared = base_cols.keys() & cur_cols.keys()
+    for name in shared:
         b, c = base_cols[name], cur_cols[name]
         if _base_type(b.dtype) != _base_type(c.dtype):
             severity = (
@@ -216,6 +273,24 @@ def _diff_table(
                     auto_fixable=_cast_is_safe(b.dtype, c.dtype),
                 )
             )
+        elif b.dtype != c.dtype:
+            # same base type, different precision/scale/length (money truncation,
+            # VARCHAR shrink...). Widening is safe; narrowing risks data loss.
+            delta = _precision_delta(b.dtype, c.dtype)
+            if delta != "same":
+                widen = delta == "widen"
+                drifts.append(
+                    DriftRecord(
+                        layer=layer,
+                        drift_type=DriftType.PRECISION_SCALE_CHANGE,
+                        severity=Severity.WARNING if widen else Severity.CRITICAL,
+                        table=base.name,
+                        column=name,
+                        old=b.dtype,
+                        new=c.dtype,
+                        auto_fixable=widen,
+                    )
+                )
         if b.nullable != c.nullable:
             drifts.append(
                 DriftRecord(
@@ -240,6 +315,66 @@ def _diff_table(
                     old=b.is_key,
                     new=c.is_key,
                     auto_fixable=False,
+                )
+            )
+
+    # column reorder: rank *shared* columns by position in each snapshot so
+    # adds/drops shifting absolute ordinals don't create false positives.
+    # Breaks positional consumers (SELECT *, positional CSV/parquet binding).
+    base_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: base_cols[x].ordinal))}
+    cur_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: cur_cols[x].ordinal))}
+    for name in shared:
+        if base_rank[name] != cur_rank[name]:
+            drifts.append(
+                DriftRecord(
+                    layer=layer,
+                    drift_type=DriftType.COLUMN_REORDER,
+                    severity=Severity.WARNING,
+                    table=base.name,
+                    column=name,
+                    old=base_rank[name],
+                    new=cur_rank[name],
+                    auto_fixable=True,
+                )
+            )
+
+    drifts.extend(_diff_measures(layer, base, cur))
+    return drifts
+
+
+def _diff_measures(
+    layer: Layer, base: TableSchema, cur: TableSchema
+) -> list[DriftRecord]:
+    """Diff DAX measures on a semantic-model table.
+
+    A dropped measure breaks every report visual bound to it; a changed
+    expression silently shifts the numbers a business already trusts.
+    """
+    drifts: list[DriftRecord] = []
+    base_m, cur_m = base.measures, cur.measures
+    for mname in base_m.keys() - cur_m.keys():
+        drifts.append(
+            DriftRecord(
+                layer=layer, drift_type=DriftType.MEASURE_DROP,
+                severity=Severity.CRITICAL, table=base.name, column=mname,
+                old=base_m[mname], new=None, auto_fixable=False,
+            )
+        )
+    for mname in cur_m.keys() - base_m.keys():
+        drifts.append(
+            DriftRecord(
+                layer=layer, drift_type=DriftType.MEASURE_ADD,
+                severity=Severity.INFO, table=base.name, column=mname,
+                old=None, new=cur_m[mname], auto_fixable=True,
+            )
+        )
+    for mname in base_m.keys() & cur_m.keys():
+        if _normalize_dax(base_m[mname]) != _normalize_dax(cur_m[mname]):
+            drifts.append(
+                DriftRecord(
+                    layer=layer, drift_type=DriftType.MEASURE_CHANGE,
+                    severity=Severity.WARNING, table=base.name, column=mname,
+                    old=base_m[mname], new=cur_m[mname], auto_fixable=False,
                 )
             )
     return drifts

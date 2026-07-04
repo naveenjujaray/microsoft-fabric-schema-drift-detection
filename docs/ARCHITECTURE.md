@@ -33,7 +33,7 @@ src/
                             getDefinition (LRO polling), SQL endpoint via pyodbc
   medallion.py              Bronze->Silver->Gold column mappings (single source
                             of truth for transforms AND lineage)
-  schema_diff.py            drift engine: 8 drift types, rename heuristics,
+  schema_diff.py            drift engine: 14 drift types, rename heuristics,
                             cast-safety classification
   lineage.py                LineageGraph, DAX Table[Column] parsing,
                             annotate_downstream() -> cross_layer_break records
@@ -73,7 +73,15 @@ sample_data/
    - drop+add pairs are re-classified as **renames** when base type matches and
      ordinal position or name similarity (difflib ≥ 0.55) agrees;
    - type changes are **warning** when the cast is widening/safe
-     (`INTEGER→BIGINT`), **critical** otherwise (`DECIMAL→VARCHAR`).
+     (`INTEGER→BIGINT`), **critical** otherwise (`DECIMAL→VARCHAR`);
+   - same-base-type declarations with different params (`DECIMAL(19,4)→
+     DECIMAL(10,2)`) become **`precision_scale_change`** — widening is a
+     warning, narrowing is critical (data truncation);
+   - shared columns whose *relative* order changed become **`column_reorder`**
+     (dense-ranked so adds/drops don't cause false positives);
+   - DAX measures are diffed too — **`measure_drop`** (critical),
+     **`measure_add`** (info), **`measure_change`** (warning, whitespace
+     normalized so TMDL reformatting isn't flagged).
 4. `medallion.build_lineage_graph` assembles edges:
    - Bronze→Silver→Gold from the declared mappings;
    - Gold→model columns from each model table's `sourceTable`;
