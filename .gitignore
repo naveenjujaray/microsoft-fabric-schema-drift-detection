@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 .baselines/
+.agent_runs/
 sample_data/warehouse.duckdb
 sample_data/generated/
 .pytest_cache/

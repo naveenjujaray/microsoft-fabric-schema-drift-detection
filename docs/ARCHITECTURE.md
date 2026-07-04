@@ -50,6 +50,14 @@ src/
     teams_channel.py        Adaptive Card; webhook or Graph channel message
     outlook_channel.py      HTML email; Graph sendMail or SMTP fallback
   prompts/                  the three Claude prompts, isolated for tuning
+  agents/
+    definitions.py          ten AgentSpecs (system prompt + tool whitelist
+                            + turn cap) - the only file that grows per agent
+    tools.py                ToolContext + guard-railed ToolRegistry (~20
+                            tools over differ/lineage/backends/git/fab CLI)
+    runtime.py              Anthropic tool-use loop: retries, turn + token
+                            budgets, JSONL run logs; MockAgentRuntime offline
+    __init__.py             list_agents() / run_agent() public surface
 sample_data/
   load_adventureworks.py    deterministic AdventureWorksLT subset -> bronze.*
   build_medallion.py        silver.* + gold.* SQL transforms; semantic_model.json;
@@ -96,4 +104,11 @@ Exit code is 1 when critical drifts exist — usable as a CI gate.
 * **Measures are graph nodes** (`layer:Table#Measure`), so measure breakage is
   first-class, and report bindings can hang off measures as well as columns.
 * **Baselines are plain JSON** — diffable, reviewable, committable if you want
-  schema history in Git.
+  schema history in Git. Every save also archives a timestamped copy under
+  `.baselines/history/` (fuel for the `historian` agent).
+* **Two LLM layers, one toolkit.** The scheduled pipeline keeps the
+  deterministic three-prompt reasoner (predictable cost, mockable CI); the
+  agents (docs/AGENTS.md) add tool-use loops for interactive work. Both read
+  the same backends, differ and lineage graph, so their evidence never
+  diverges — and write access is gated identically (branch-only git, explicit
+  --allow-writes).

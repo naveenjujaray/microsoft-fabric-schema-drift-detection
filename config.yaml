@@ -35,6 +35,11 @@ llm:
   max_retries: 3
   # set to false to use the deterministic mock reasoner (no API calls)
   enabled: true
+  # agentic tool-use runs (python main.py --agent <name>)
+  agents:
+    model: ""                # override model for agents; "" = llm.model
+    max_total_tokens: 200000 # cumulative budget per agent run
+    run_log_dir: ".agent_runs"  # JSONL transcript per run
 
 git:
   reports_dir: "pbip_reports"   # folder containing PBIP / TMDL sources
