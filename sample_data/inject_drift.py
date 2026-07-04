@@ -8,6 +8,8 @@ Scenarios (pick with --scenario, default 'all'):
     type_change  silver.sales_order_lines.unit_price DECIMAL -> VARCHAR
                  (breaks Avg Unit Price measure)
     nullability  bronze.Product.StandardCost NOT NULL -> nullable
+    precision    silver.sales_orders.subtotal DECIMAL(19,4) -> DECIMAL(10,2)
+                 (money truncation risk; critical narrowing)
     add          bronze.Customer gains LoyaltyTier column (info-level)
 
 Usage:
@@ -47,6 +49,14 @@ def relax_standard_cost(con: duckdb.DuckDBPyConnection) -> str:
     return "bronze.Product: StandardCost NOT NULL -> nullable"
 
 
+def narrow_subtotal(con: duckdb.DuckDBPyConnection) -> str:
+    con.execute("""
+        ALTER TABLE silver.sales_orders
+        ALTER COLUMN subtotal SET DATA TYPE DECIMAL(10,2)
+    """)
+    return "silver.sales_orders: subtotal DECIMAL(19,4) -> DECIMAL(10,2)"
+
+
 def add_loyalty(con: duckdb.DuckDBPyConnection) -> str:
     con.execute("ALTER TABLE bronze.Customer ADD COLUMN LoyaltyTier VARCHAR")
     return "bronze.Customer: LoyaltyTier added"
@@ -57,6 +67,7 @@ SCENARIOS = {
     "drop": drop_freight,
     "type_change": retype_unit_price,
     "nullability": relax_standard_cost,
+    "precision": narrow_subtotal,
     "add": add_loyalty,
 }
 

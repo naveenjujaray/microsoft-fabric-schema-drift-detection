@@ -149,8 +149,10 @@ _BREAKING = {
     DriftType.COLUMN_DROP,
     DriftType.COLUMN_RENAME,
     DriftType.TYPE_CHANGE,
+    DriftType.PRECISION_SCALE_CHANGE,
     DriftType.KEY_CHANGE,
     DriftType.TABLE_DROP,
+    DriftType.MEASURE_DROP,
 }
 
 
