@@ -81,6 +81,7 @@ each model turn, each tool call + result, finish/abort reason, token counts.
 | `query_lineage` / `list_lineage_nodes` / `count_downstream_reports` | lineage walking + blast radius | – |
 | `profile_column` / `sample_rows` / `run_sql` | data evidence (simulate/DuckDB only; SELECT-only, row-capped) | – |
 | `grep_dax` / `read_report_metadata` | measure + report inspection | – |
+| `workspace_map` | cross-workspace topology + per-workspace blast radius for a node | – |
 | `read_file` | sandboxed repo file read | – |
 | `list_baselines` / `diff_snapshots` | snapshot archive + historical diffs | – |
 | `git_status` / `read_pr_comments` | repo + PR state (gh CLI) | – |

@@ -5,8 +5,9 @@
 **Lineage-aware schema-drift detection for Microsoft Fabric medallion architectures —
 with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack alerts.**
 
+[![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-96%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-155%20passing-brightgreen.svg)](#-tests)
 [![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
@@ -65,10 +66,10 @@ Detection pipeline:
  ├─ FabricBackend (fab CLI + REST)          │
  └─ LocalBackend  (DuckDB + JSON)           ▼
         │ current schemas ────────►  schema_diff  ──►  lineage graph  ──►  Claude
-        │                            (14 drift types)  (cross-layer     (severity,
-        ▼                                               breaks)          fixes, PR text)
-   five LayerSchemas                                        │
-                                                            ▼
+        │                            (15 drift types)  (cross-layer +   (severity,
+        ▼                                               cross-workspace  fixes, PR text)
+   five LayerSchemas                                    breaks)   │
+                                                                  ▼
                                     git_handler (branch+PR)   notifications
                                                               (console/Slack/Teams/Outlook)
 ```
@@ -88,6 +89,27 @@ silver:customers.email
 report will break"*, not just *"a column changed"*. DAX measures are parsed for
 `Table[Column]` references, so `SUM(Sales[Freight])` breaks when
 `silver.sales_orders.freight` is dropped, three layers up.
+
+## 🌐 …and cross-WORKSPACE lineage
+
+Real Fabric estates span workspaces: ingestion in one, the enterprise
+warehouse in another, reporting in a third — connected by OneLake shortcuts,
+mirrored databases and semantic-model bindings. Declare that topology in a
+[workspace manifest](sample_data/workspaces.json) and the same drift becomes:
+
+```
+Contoso-Ingestion (Workspace A)      silver:customers.email   ← the rename
+  └─ OneLake shortcut ─► Contoso-Enterprise-DW (Workspace B)
+                           gold:Dim_Customer.Email            cross_workspace_break
+                           semantic_model:Customer.Email      cross_workspace_break
+                             └─► Contoso-Reporting (Workspace C)
+                                   reports:Customer Detail    cross_workspace_break
+```
+
+Impact analysis then reports the workspace name, artifact, workspace path and
+per-workspace blast radius — and states plainly: *"This schema change impacts
+assets across multiple Microsoft Fabric workspaces."* Tenant-boundary crossings
+are flagged too. Full guide: [docs/CROSS_WORKSPACE.md](docs/CROSS_WORKSPACE.md).
 
 ## 📖 Example story — the rename that would have reached the CFO
 
@@ -151,7 +173,7 @@ column, a type change, and more) and prints every step above.
 
 ## 🔬 Drift types
 
-Fourteen typed drifts, grouped by the level they hit. Severity is judged by
+Fifteen typed drifts, grouped by the level they hit. Severity is judged by
 whether a change *breaks* consumers or just *risks* them; `auto_fixable` means
 the repair is mechanical (a downstream find/replace), not a business decision.
 
@@ -163,7 +185,7 @@ the repair is mechanical (a downstream find/replace), not a business decision.
 | `column_add` | 🔵 info | ✅ | new field ingested; safe, but should flow to Silver/Gold |
 | `type_change` | 🟡 warning (safe cast) / 🔴 critical | safe casts only | `INTEGER→BIGINT` widens (safe); `DECIMAL→VARCHAR` corrupts joins/measures |
 | `precision_scale_change` | 🟡 warning (widen) / 🔴 critical (narrow) | widen only | `DECIMAL(19,4)→DECIMAL(10,2)` silently **truncates money**; `VARCHAR(50)→VARCHAR(20)` clips values |
-| `column_rename` <sub>(heuristic: type + position + name similarity)</sub> | 🔴 critical | ✅ | a refactor renames `email→email_address`; every downstream ref breaks but is mechanically remappable |
+| `column_rename` <sub>(deterministic stable matching: type + position + name similarity, with a reported confidence score)</sub> | 🔴 critical | ✅ | a refactor renames `email→email_address`; every downstream ref breaks but is mechanically remappable |
 | `column_reorder` | 🟡 warning | ✅ | positions swap; breaks `SELECT *` inserts and positional CSV/parquet binding |
 | `nullability_change` | 🟡 warning | ✅ | `NOT NULL→NULL` lets nulls into a column a measure assumes is populated |
 
@@ -183,11 +205,12 @@ the repair is mechanical (a downstream find/replace), not a business decision.
 | `measure_add` | 🔵 info | ✅ | new measure published; informational |
 | `measure_change` | 🟡 warning | ❌ | measure expression edited → **numbers shift silently** under a report the business already trusts |
 
-**Cross-layer**
+**Cross-layer / cross-workspace**
 
 | Type | Severity | Auto-fixable | Enterprise scenario |
 |---|---|---|---|
 | `cross_layer_break` <sub>(synthesized via lineage graph)</sub> | 🔴 critical | rename-driven only | a Bronze/Silver change reaches a Gold column, a DAX measure, or a Power BI visual **three layers up** |
+| `cross_workspace_break` <sub>(synthesized when the blast radius crosses a workspace boundary)</sub> | 🔴 critical | rename-driven only | a Silver change in the ingestion workspace breaks the warehouse, semantic model, or reports in **other workspaces** via shortcuts / mirrors / model bindings |
 
 Whitespace-only DAX reformatting (Power BI Desktop rewrites TMDL on every save)
 is normalized away, so `measure_change` fires on real logic edits — not noise.
@@ -214,7 +237,13 @@ python main.py --mode live --once --open-pr      # real Fabric + real PR
 python main.py --provision                       # show fab provisioning steps
 ```
 
-Exit codes: `0` clean · `1` critical drift (usable as a CI gate) · `2` config error.
+Exit codes: `0` clean · `1` critical drift (usable as a CI gate) · `2` config
+error · `3` missing/corrupt baselines.
+
+> **Baselines are never recreated implicitly.** If baseline files vanish or
+> corrupt, the run fails with exit code `3` and tells you to re-capture with
+> `--baseline` — silent recreation would hide exactly the changes a drift
+> detector exists to catch.
 
 Everything is configured in [config.yaml](config.yaml) (IDs, model, channels) +
 `.env` (secrets — see [.env.example](.env.example)). **No hardcoded IDs anywhere.**
@@ -297,18 +326,27 @@ credential as Fabric — one app registration, one auth stack (permissions:
 | Doc | Contents |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module map, data flow, design decisions |
+| [docs/CROSS_WORKSPACE.md](docs/CROSS_WORKSPACE.md) | cross-workspace lineage: manifest format, link types, tenant boundaries |
 | [docs/AGENTS.md](docs/AGENTS.md) | the ten agents: tools, guard rails, examples, config |
 | [docs/FABRIC_SETUP.md](docs/FABRIC_SETUP.md) | verified `fab` CLI sequence to stand up the workspace + Graph permissions |
 | [docs/FABRIC_NATIVE.md](docs/FABRIC_NATIVE.md) | notebook / pipeline / `fab deploy` — running inside Fabric |
 | [docs/DEMO.md](docs/DEMO.md) | the simulate-mode demo, step by step |
 
-## ✅ Tests
+## ✅ Tests & quality gates
 
 ```bash
-pytest    # 96 tests: differ (14 drift types), lineage, auth methods, agent
-          # runtime + tool guard rails (mocked), CLI wrapper (mocked),
-          # Claude (mocked), notification channels, local backend
+pytest                    # 155 tests: differ (15 drift types), deterministic
+                          # rename matching, cross-workspace lineage, baseline
+                          # fail-loud policy, REST retry/backoff, git handler
+                          # security guards, agents, notifications, backends
+ruff check .              # lint (incl. bugbear + security rules)
+mypy                      # strict-leaning type check, 0 errors
+bandit -c pyproject.toml -r src main.py   # security scan
 ```
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs all four on
+every push/PR across Python 3.10 and 3.12, plus `pip-audit` for dependency
+vulnerabilities, with a 75% coverage floor.
 
 ## 📄 License
 

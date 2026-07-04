@@ -44,10 +44,19 @@ python main.py --mode simulate --once --dry-run
 
 ## What you should see
 
-* **Drift table** (rich console): ~15 records — the 5 injected drifts plus the
-  synthesized `cross_layer_break`s, e.g. the freight drop cascading to
+* **Cross-workspace banner** first: the shipped
+  [workspace manifest](../sample_data/workspaces.json) maps the demo estate
+  onto three workspaces (Contoso-Ingestion → Contoso-Enterprise-DW →
+  Contoso-Reporting), so the run opens with
+  `Cross-workspace impact: N break(s) reaching workspace(s): ...`.
+* **Drift table** (rich console): ~15 records — the injected drifts plus the
+  synthesized breaks, e.g. the freight drop cascading to
   `gold:Fact_Sales.Freight` → `semantic_model:Sales.Freight` → measure
-  `Revenue incl Freight` → report `Customer Detail`.
+  `Revenue incl Freight` → report `Customer Detail`. Because those targets
+  live in *other* workspaces, they surface as `cross_workspace_break`
+  (annotated `via onelake_shortcut` etc.); remove
+  `lineage.workspaces_manifest` from `config.yaml` to see plain
+  `cross_layer_break`s instead.
 * **PR preview**: branch name, conventional-commit subject, and a PR body with
   "Drift detected / Fixes applied / Needs human review" sections. The rename is
   auto-fixable (`sourceColumn: email` → `sourceColumn: email_address` in
