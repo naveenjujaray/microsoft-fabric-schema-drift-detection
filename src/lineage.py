@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict, deque
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from .backends.base import Layer, LayerSchema
 from .schema_diff import DriftRecord, DriftType, Severity
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .workspace import WorkspaceRegistry
 
 _COLUMN_REF = re.compile(r"'?(\w+)'?\[(\w+)\]")  # DAX Table[Column] refs
 
@@ -156,11 +159,34 @@ _BREAKING = {
 }
 
 
+def _split_target(target: str) -> tuple[Layer, str, str | None]:
+    """Parse a node id into (layer, table, column-or-measure-label)."""
+    layer_name, rest = target.split(":", 1)
+    layer = Layer(layer_name)
+    if "#" in rest:
+        table, measure = rest.split("#", 1)
+        return layer, table, f"[measure] {measure}"
+    if "." in rest:
+        table, column = rest.split(".", 1)
+        return layer, table, column
+    return layer, rest, None
+
+
 def annotate_downstream(
-    drifts: list[DriftRecord], graph: LineageGraph
+    drifts: list[DriftRecord],
+    graph: LineageGraph,
+    workspaces: "WorkspaceRegistry | None" = None,
 ) -> list[DriftRecord]:
-    """Fill ``downstream_impact`` on each drift and synthesize
-    ``cross_layer_break`` records for impacted nodes in *other* layers.
+    """Fill ``downstream_impact`` on each drift and synthesize break
+    records for impacted nodes in *other* layers.
+
+    When a ``WorkspaceRegistry`` is provided, each drift is stamped
+    with its owning workspace and impacted targets living in a
+    *different* workspace produce ``cross_workspace_break`` records
+    (annotated with the connecting link type and tenant boundary);
+    same-workspace targets in other layers keep producing
+    ``cross_layer_break`` records. Without a registry the behavior is
+    unchanged: everything cross-layer is a ``cross_layer_break``.
 
     Returns the combined list (original drifts + synthesized breaks).
     """
@@ -185,6 +211,12 @@ def annotate_downstream(
 
         drift.downstream_impact = impacted
 
+        src_ws = (
+            workspaces.workspace_for_layer(drift.layer) if workspaces else None
+        )
+        if src_ws is not None:
+            drift.workspace = src_ws.name
+
         if drift.drift_type not in _BREAKING or drift.severity is Severity.INFO:
             continue
 
@@ -196,26 +228,56 @@ def annotate_downstream(
                 continue
             seen_breaks.add(target)
 
-            tgt_layer = Layer(layer_name)
-            rest = target.split(":", 1)[1]
-            if "#" in rest:
-                table, column = rest.split("#", 1)
-                column = f"[measure] {column}"
-            elif "." in rest:
-                table, column = rest.split(".", 1)
-            else:
-                table, column = rest, None
-            extra.append(
-                DriftRecord(
-                    layer=tgt_layer,
-                    drift_type=DriftType.CROSS_LAYER_BREAK,
-                    severity=Severity.CRITICAL,
-                    table=table,
-                    column=column,
-                    old=f"depends on {node}",
-                    new=f"broken by {drift.drift_type.value}",
-                    downstream_impact=graph.downstream(target),
-                    auto_fixable=drift.drift_type is DriftType.COLUMN_RENAME,
-                )
+            tgt_layer, table, column = _split_target(target)
+            tgt_ws = (
+                workspaces.workspace_for_layer(tgt_layer) if workspaces else None
             )
+            crosses_workspace = (
+                src_ws is not None
+                and tgt_ws is not None
+                and src_ws.workspace_id != tgt_ws.workspace_id
+            )
+
+            if crosses_workspace:
+                assert src_ws is not None and tgt_ws is not None
+                assert workspaces is not None
+                link = workspaces.link_between(drift.layer, tgt_layer)
+                via = f" via {link.link_type}" if link else ""
+                tenant_note = (
+                    " (crosses tenant boundary)"
+                    if workspaces.crosses_tenant(src_ws, tgt_ws)
+                    else ""
+                )
+                extra.append(
+                    DriftRecord(
+                        layer=tgt_layer,
+                        drift_type=DriftType.CROSS_WORKSPACE_BREAK,
+                        severity=Severity.CRITICAL,
+                        table=table,
+                        column=column,
+                        old=f"depends on {node} in workspace {src_ws.name}",
+                        new=(
+                            f"broken by {drift.drift_type.value}"
+                            f"{via}{tenant_note}"
+                        ),
+                        downstream_impact=graph.downstream(target),
+                        auto_fixable=drift.drift_type is DriftType.COLUMN_RENAME,
+                        workspace=tgt_ws.name,
+                    )
+                )
+            else:
+                extra.append(
+                    DriftRecord(
+                        layer=tgt_layer,
+                        drift_type=DriftType.CROSS_LAYER_BREAK,
+                        severity=Severity.CRITICAL,
+                        table=table,
+                        column=column,
+                        old=f"depends on {node}",
+                        new=f"broken by {drift.drift_type.value}",
+                        downstream_impact=graph.downstream(target),
+                        auto_fixable=drift.drift_type is DriftType.COLUMN_RENAME,
+                        workspace=tgt_ws.name if tgt_ws else None,
+                    )
+                )
     return drifts + extra

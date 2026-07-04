@@ -30,6 +30,7 @@ from ..backends.base import Layer, SchemaBackend
 from ..lineage import LineageGraph
 from ..schema_diff import diff_all
 from ..schema_store import SchemaStore
+from ..workspace import WorkspaceRegistry, load_registry
 
 _MAX_RESULT_CHARS = 8000
 _SQL_FORBIDDEN = re.compile(
@@ -64,6 +65,7 @@ class ToolContext:
     repo_dir: Path
     reports_dir: Path
     allow_writes: bool = False
+    workspaces: WorkspaceRegistry | None = None
 
     @property
     def db_path(self) -> Path | None:
@@ -107,6 +109,9 @@ class ToolContext:
         graph = build_lineage_graph(
             baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
         )
+        workspaces = load_registry(
+            cfg.get("lineage", {}).get("workspaces_manifest", "")
+        )
         repo_dir = Path.cwd()
         return cls(
             cfg=cfg,
@@ -118,6 +123,7 @@ class ToolContext:
             reports_dir=repo_dir
             / cfg.get("git", {}).get("reports_dir", "pbip_reports"),
             allow_writes=allow_writes,
+            workspaces=workspaces,
         )
 
     # ------------------------------------------------------------------
@@ -242,7 +248,9 @@ def build_registry(
         if not baselines:
             return "ERROR: no baselines captured yet (run --baseline first)"
         current = ctx.backend.get_all_schemas()
-        drifts = annotate_downstream(diff_all(baselines, current), ctx.graph)
+        drifts = annotate_downstream(
+            diff_all(baselines, current), ctx.graph, ctx.workspaces
+        )
         return _json([d.to_dict() for d in drifts])
 
     registry.register(Tool(
@@ -299,6 +307,53 @@ def build_registry(
         ),
         input_schema=_obj({"prefix": {"type": "string"}}),
         fn=list_lineage_nodes,
+    ))
+
+    def workspace_map(node: str = "") -> str:
+        if ctx.workspaces is None:
+            return (
+                "ERROR: no workspace manifest configured "
+                "(set lineage.workspaces_manifest in config.yaml)"
+            )
+        reg = ctx.workspaces
+        out: dict[str, Any] = {
+            "tenant_id": reg.tenant_id,
+            "workspaces": [
+                {
+                    "name": ws.name,
+                    "workspace_id": ws.workspace_id,
+                    "items": [
+                        {"name": i.name, "type": i.item_type,
+                         "layers": [layer.value for layer in i.layers]}
+                        for i in ws.items
+                    ],
+                }
+                for ws in reg.workspaces
+            ],
+            "links": [
+                {"type": ln.link_type,
+                 "from": f"{ln.src_workspace}:{ln.src_layer.value}",
+                 "to": f"{ln.dst_workspace}:{ln.dst_layer.value}"}
+                for ln in reg.links
+            ],
+        }
+        if node:
+            down = ctx.graph.downstream(node)
+            out["node"] = node
+            out["workspace_path"] = reg.workspace_path(node)
+            out["cross_workspace_blast_radius"] = reg.blast_radius(down)
+        return _json(out)
+
+    registry.register(Tool(
+        name="workspace_map",
+        description=(
+            "Cross-workspace topology: workspaces, their Fabric items, and "
+            "the shortcut/mirror/semantic-model links between them. Pass an "
+            "optional lineage node id to also get its workspace path and "
+            "per-workspace blast radius."
+        ),
+        input_schema=_obj({"node": {"type": "string"}}),
+        fn=workspace_map,
     ))
 
     def count_downstream_reports(node: str) -> str:
@@ -742,7 +797,8 @@ def build_registry(
         drifts = []
         if baselines:
             drifts = annotate_downstream(
-                diff_all(baselines, ctx.backend.get_all_schemas()), ctx.graph
+                diff_all(baselines, ctx.backend.get_all_schemas()),
+                ctx.graph, ctx.workspaces,
             )
         alert = DriftAlert(drifts=drifts, summary=summary, environment=ctx.mode)
         channels = {

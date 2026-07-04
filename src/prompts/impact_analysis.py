@@ -14,6 +14,9 @@ DETECTED DRIFTS:
 LINEAGE CONTEXT (upstream node -> downstream nodes at risk):
 {lineage_json}
 
+WORKSPACE TOPOLOGY (cross-workspace estate; empty if single-workspace):
+{workspace_json}
+
 For EACH drift, assess:
 1. "severity": confirm or adjust ("info" | "warning" | "critical").
 2. "impact": plain-English business impact in 1-2 sentences (who/what breaks:
@@ -22,6 +25,19 @@ For EACH drift, assess:
 4. "fixable": "yes" | "no" | "partial" - can this be fixed mechanically
    (e.g. propagate a rename into TMDL) without human data-modeling decisions?
 5. "recommended_action": one concrete next step.
+6. "workspace": the Microsoft Fabric workspace owning the drifted asset
+   (from the drift record / topology), or null.
+7. "affected_workspaces": every workspace containing impacted downstream
+   assets, with the impacted artifact names and workspace paths.
+
+Cross-workspace rules:
+- cross_workspace_break drifts mean the blast radius escapes the source
+  workspace through a shortcut, OneLake shortcut, mirrored database,
+  warehouse/lakehouse reference or semantic-model binding.
+- When impacted assets span MORE THAN ONE workspace, the "summary" MUST
+  include this exact sentence: "This schema change impacts assets across
+  multiple Microsoft Fabric workspaces."
+- Quantify the blast radius per workspace (how many assets in each).
 
 Return ONLY valid JSON - no prose, no markdown fences - with this shape:
 {{
@@ -32,7 +48,12 @@ Return ONLY valid JSON - no prose, no markdown fences - with this shape:
       "impact": "...",
       "affected_reports": ["..."],
       "fixable": "yes",
-      "recommended_action": "..."
+      "recommended_action": "...",
+      "workspace": "Contoso-Ingestion",
+      "affected_workspaces": [
+        {{"workspace": "Contoso-Reporting", "assets": 3,
+          "examples": ["Contoso-Reporting / SalesReports (Report) / ..."]}}
+      ]
     }}
   ],
   "summary": "One-paragraph executive summary of the overall blast radius."

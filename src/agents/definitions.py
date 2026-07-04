@@ -124,10 +124,14 @@ count_downstream_reports for the blast radius. For provenance questions
 ('where does X come from'): query_lineage upstream. Enrich with
 grep_dax / read_report_metadata when measures or reports are involved.
 
+When a workspace manifest is configured, use workspace_map to state
+WHICH Microsoft Fabric workspace each impacted asset lives in and the
+per-workspace blast radius - cross-workspace impact matters most.
+
 Answer with: direct answer first, then the evidence chain
 (node -> node -> node), then affected reports/measures as a short list.""",
     tools=("list_lineage_nodes", "query_lineage", "count_downstream_reports",
-           "grep_dax", "read_report_metadata", "get_schema"),
+           "grep_dax", "read_report_metadata", "get_schema", "workspace_map"),
     max_turns=10,
 ))
 
@@ -180,9 +184,12 @@ Role: incident triage for schema drift.
    auto-fixable or human-needed.
 
 Tie-breakers: revenue-related measures > customer-facing reports >
-internal. Auto-fixable items that unblock many symptoms float up.""",
+internal. Auto-fixable items that unblock many symptoms float up.
+Drift that breaks assets in OTHER workspaces (cross_workspace_break)
+outranks same-workspace breakage of similar size - use workspace_map
+for the per-workspace blast radius.""",
     tools=("run_diff", "count_downstream_reports", "read_report_metadata",
-           "query_lineage", "grep_dax"),
+           "query_lineage", "grep_dax", "workspace_map"),
     max_turns=12,
     default_task="Triage current drift into a prioritized fix queue.",
 ))

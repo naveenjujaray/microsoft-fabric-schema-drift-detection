@@ -8,7 +8,7 @@ Drift types:
     column_drop, column_add, type_change, precision_scale_change,
     column_rename, column_reorder, nullability_change, table_drop,
     table_add, key_change, measure_drop, measure_add, measure_change,
-    cross_layer_break
+    cross_layer_break, cross_workspace_break
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ class DriftType(str, Enum):
     MEASURE_ADD = "measure_add"
     MEASURE_CHANGE = "measure_change"
     CROSS_LAYER_BREAK = "cross_layer_break"
+    CROSS_WORKSPACE_BREAK = "cross_workspace_break"
 
 
 class Severity(str, Enum):

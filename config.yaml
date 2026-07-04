@@ -28,6 +28,13 @@ simulate:
 baseline:
   dir: ".baselines"       # where per-layer schema snapshots are stored
 
+lineage:
+  # Optional cross-workspace topology manifest. When present, drift
+  # whose blast radius crosses a workspace boundary is reported as
+  # cross_workspace_break (with link type + tenant boundary detail).
+  # See sample_data/workspaces.json and docs/CROSS_WORKSPACE.md.
+  workspaces_manifest: "sample_data/workspaces.json"
+
 llm:
   provider: anthropic
   model: "claude-opus-4-6"   # override freely

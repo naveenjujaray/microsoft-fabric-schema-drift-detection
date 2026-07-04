@@ -1,0 +1,59 @@
+{
+  "tenant_id": "11111111-aaaa-4bbb-8ccc-000000000001",
+  "workspaces": [
+    {
+      "workspace_id": "a1000000-0000-4000-8000-00000000000a",
+      "name": "Contoso-Ingestion",
+      "items": [
+        {
+          "item_id": "a1100000-0000-4000-8000-00000000001a",
+          "type": "Lakehouse",
+          "name": "IngestionLakehouse",
+          "layers": ["bronze", "silver"]
+        }
+      ]
+    },
+    {
+      "workspace_id": "b2000000-0000-4000-8000-00000000000b",
+      "name": "Contoso-Enterprise-DW",
+      "items": [
+        {
+          "item_id": "b2100000-0000-4000-8000-00000000001b",
+          "type": "Warehouse",
+          "name": "EnterpriseWarehouse",
+          "layers": ["gold"]
+        },
+        {
+          "item_id": "b2200000-0000-4000-8000-00000000002b",
+          "type": "SemanticModel",
+          "name": "SalesModel",
+          "layers": ["semantic_model"]
+        }
+      ]
+    },
+    {
+      "workspace_id": "c3000000-0000-4000-8000-00000000000c",
+      "name": "Contoso-Reporting",
+      "items": [
+        {
+          "item_id": "c3100000-0000-4000-8000-00000000001c",
+          "type": "Report",
+          "name": "SalesReports",
+          "layers": ["reports"]
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "type": "onelake_shortcut",
+      "from": { "workspace": "Contoso-Ingestion", "layer": "silver" },
+      "to": { "workspace": "Contoso-Enterprise-DW", "layer": "gold" }
+    },
+    {
+      "type": "semantic_model",
+      "from": { "workspace": "Contoso-Enterprise-DW", "layer": "semantic_model" },
+      "to": { "workspace": "Contoso-Reporting", "layer": "reports" }
+    }
+  ]
+}

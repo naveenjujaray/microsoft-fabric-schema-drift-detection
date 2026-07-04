@@ -32,6 +32,7 @@ from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
 from src.schema_diff import DriftRecord, diff_all
 from src.schema_store import BaselineError, SchemaStore
+from src.workspace import load_registry
 
 console = Console()
 logger = logging.getLogger("drift-detective")
@@ -125,15 +126,29 @@ def run_once(
     graph = build_lineage_graph(
         baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
     )
+    workspaces = load_registry(
+        cfg.get("lineage", {}).get("workspaces_manifest", "")
+    )
     drifts: list[DriftRecord] = diff_all(baselines, current)
-    drifts = annotate_downstream(drifts, graph)
+    drifts = annotate_downstream(drifts, graph, workspaces)
 
     if not drifts:
         console.print("[green]No schema drift detected.[/]")
         return 0
 
+    ws_breaks = [
+        d for d in drifts
+        if d.drift_type.value == "cross_workspace_break"
+    ]
+    if ws_breaks:
+        impacted_ws = sorted({d.workspace for d in ws_breaks if d.workspace})
+        console.print(
+            f"[bold red]Cross-workspace impact:[/] {len(ws_breaks)} break(s) "
+            f"reaching workspace(s): {', '.join(impacted_ws)}"
+        )
+
     # --- Claude reasoning -------------------------------------------------
-    reasoner = make_reasoner(cfg.get("llm", {}))
+    reasoner = make_reasoner(cfg.get("llm", {}), workspaces)
     impact = reasoner.analyze_impact(drifts)
     summary = impact.get("summary", "")
     for analysis in impact.get("analyses", []):
