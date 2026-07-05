@@ -1,0 +1,36 @@
+# Lineage manifest — declare YOUR medallion's transformation contract.
+#
+# Point config.yaml at this file:
+#
+#   lineage:
+#     manifest: "examples/lineage.example.yaml"
+#
+# Each entry maps one upstream column to the downstream column it feeds:
+#   (src_table, src_column, dst_table, dst_column)
+#
+# Two equivalent entry forms — positional list or named mapping:
+#
+#   - [Customer, CustomerID, customers, customer_id]
+#   - src_table: Customer
+#     src_column: CustomerID
+#     dst_table: customers
+#     dst_column: customer_id
+#
+# Gold -> Semantic Model -> Reports edges are NOT declared here: they are
+# derived automatically from the semantic model definition (sourceTable +
+# DAX Table[Column] references) and PBIP report metadata.
+#
+# Tip: export these tuples from your Dataflow Gen2 / notebook transform
+# definitions so the manifest can never drift from the real transforms.
+
+bronze_to_silver:
+  - [Customer, CustomerID, customers, customer_id]
+  - [Customer, EmailAddress, customers, email]
+  - [SalesOrderHeader, SalesOrderID, sales_orders, order_id]
+  - [SalesOrderHeader, TotalDue, sales_orders, total_due]
+
+silver_to_gold:
+  - [customers, customer_id, Dim_Customer, CustomerKey]
+  - [customers, email, Dim_Customer, Email]
+  - [sales_orders, order_id, Fact_Sales, OrderID]
+  - [sales_orders, total_due, Fact_Sales, TotalDue]

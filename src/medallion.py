@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from .backends.base import Layer, LayerSchema
 from .lineage import LineageGraph
+from .lineage_manifest import LineageManifest
 
 # ---------------------------------------------------------------------------
 # Bronze -> Silver: (bronze_table, bronze_col) -> (silver_table, silver_col)
@@ -88,17 +89,27 @@ SILVER_TO_GOLD: list[tuple[str, str, str, str]] = [
 def build_lineage_graph(
     semantic_model: LayerSchema | None = None,
     reports: LayerSchema | None = None,
+    manifest: LineageManifest | None = None,
 ) -> LineageGraph:
     """Assemble the full cross-layer lineage graph.
 
-    Bronze->Silver->Gold edges come from the declared mappings above;
-    Gold->SemanticModel->Reports edges are derived from the semantic
-    model definition (source tables + DAX refs) and report metadata.
+    Bronze->Silver->Gold edges come from the lineage ``manifest`` when
+    one is provided (``lineage.manifest`` in config.yaml), otherwise
+    from the AdventureWorksLT demo constants above. Gold->SemanticModel
+    ->Reports edges are derived from the semantic model definition
+    (source tables + DAX refs) and report metadata either way.
     """
+    if manifest is not None:
+        bronze_to_silver = [m.as_tuple() for m in manifest.bronze_to_silver]
+        silver_to_gold = [m.as_tuple() for m in manifest.silver_to_gold]
+    else:
+        bronze_to_silver = BRONZE_TO_SILVER
+        silver_to_gold = SILVER_TO_GOLD
+
     graph = LineageGraph()
-    for src_t, src_c, dst_t, dst_c in BRONZE_TO_SILVER:
+    for src_t, src_c, dst_t, dst_c in bronze_to_silver:
         graph.add_mapping(Layer.BRONZE, src_t, src_c, Layer.SILVER, dst_t, dst_c)
-    for src_t, src_c, dst_t, dst_c in SILVER_TO_GOLD:
+    for src_t, src_c, dst_t, dst_c in silver_to_gold:
         graph.add_mapping(Layer.SILVER, src_t, src_c, Layer.GOLD, dst_t, dst_c)
     if semantic_model is not None:
         graph.register_semantic_model(semantic_model)

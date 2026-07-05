@@ -29,6 +29,11 @@ baseline:
   dir: ".baselines"       # where per-layer schema snapshots are stored
 
 lineage:
+  # Optional Bronze->Silver->Gold column-mapping manifest (YAML or JSON).
+  # Empty = built-in AdventureWorksLT demo mappings. Declare your own
+  # medallion's transformation contract here — see
+  # examples/lineage.example.yaml for the format.
+  manifest: ""
   # Optional cross-workspace topology manifest. When present, drift
   # whose blast radius crosses a workspace boundary is reported as
   # cross_workspace_break (with link type + tenant boundary detail).

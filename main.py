@@ -27,6 +27,7 @@ from src.backends.base import Layer, SchemaBackend
 from src.config import load_config
 from src.git_handler import GitHandler
 from src.lineage import annotate_downstream
+from src.lineage_manifest import load_lineage_manifest
 from src.llm_reasoner import make_reasoner
 from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
@@ -123,12 +124,13 @@ def run_once(
         )
     baselines = store.load_all()
 
+    lineage_cfg = cfg.get("lineage", {})
     graph = build_lineage_graph(
-        baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
+        baselines.get(Layer.SEMANTIC_MODEL),
+        baselines.get(Layer.REPORTS),
+        manifest=load_lineage_manifest(lineage_cfg.get("manifest", "")),
     )
-    workspaces = load_registry(
-        cfg.get("lineage", {}).get("workspaces_manifest", "")
-    )
+    workspaces = load_registry(lineage_cfg.get("workspaces_manifest", ""))
     drifts: list[DriftRecord] = diff_all(baselines, current)
     drifts = annotate_downstream(drifts, graph, workspaces)
 
