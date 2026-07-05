@@ -44,6 +44,16 @@ simulate:
 baseline:
   dir: ".baselines"       # where per-layer schema snapshots are stored
 
+watch:
+  # Layers to watch; empty = all layers the backend advertises.
+  # Unwatched layers are never even queried.
+  layers: []
+  # full        report every drift (default)
+  # boundaries  suppress intra-layer drift; report only cross_layer_break /
+  #             cross_workspace_break - for contract-enforced layers where
+  #             internal change is expected and only boundary breakage matters
+  mode: full
+
 lineage:
   # Optional Bronze->Silver->Gold column-mapping manifest (YAML or JSON).
   # Empty = built-in AdventureWorksLT demo mappings. Declare your own

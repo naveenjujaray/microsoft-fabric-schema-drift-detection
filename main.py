@@ -24,7 +24,7 @@ if hasattr(sys.stdout, "reconfigure"):  # pragma: no cover
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 
 from src.backends.base import Layer, SchemaBackend
-from src.config import load_config
+from src.config import load_config, parse_watch_config
 from src.git_handler import GitHandler
 from src.lineage import annotate_downstream
 from src.lineage_manifest import load_lineage_manifest
@@ -132,7 +132,12 @@ def run_once(
             "explicitly with:  python main.py --baseline"
         )
 
-    current = backend.get_all_schemas()
+    watch = parse_watch_config(cfg)
+    watched_layers = [
+        layer for layer in backend.list_layers() if watch.includes(layer)
+    ]
+    # unwatched layers are never queried at all
+    current = {layer: backend.get_schema(layer) for layer in watched_layers}
     missing = store.missing_layers(current.keys())
     if missing:
         names = ", ".join(layer.value for layer in missing)
@@ -141,7 +146,11 @@ def run_once(
             "Baselines are never recreated implicitly - if this is "
             "intentional, re-capture with:  python main.py --baseline"
         )
-    baselines = store.load_all()
+    baselines = {
+        layer: schema
+        for layer, schema in store.load_all().items()
+        if watch.includes(layer)
+    }
 
     lineage_cfg = cfg.get("lineage", {})
     graph = build_lineage_graph(
@@ -152,6 +161,16 @@ def run_once(
     workspaces = load_registry(lineage_cfg.get("workspaces_manifest", ""))
     drifts: list[DriftRecord] = diff_all(baselines, current)
     drifts = annotate_downstream(drifts, graph, workspaces)
+
+    if watch.mode == "boundaries":
+        # contract-enforced layers: intra-layer drift is suppressed,
+        # only lineage-synthesized boundary breaks surface
+        drifts = [
+            d for d in drifts
+            if d.drift_type in (
+                DriftType.CROSS_LAYER_BREAK, DriftType.CROSS_WORKSPACE_BREAK
+            )
+        ]
 
     if not drifts:
         console.print("[green]No schema drift detected.[/]")
