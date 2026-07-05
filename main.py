@@ -30,7 +30,7 @@ from src.lineage import annotate_downstream
 from src.llm_reasoner import make_reasoner
 from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
-from src.schema_diff import DriftRecord, diff_all
+from src.schema_diff import DriftRecord, DriftType, diff_all
 from src.schema_store import BaselineError, SchemaStore
 from src.workspace import load_registry
 
@@ -138,7 +138,7 @@ def run_once(
 
     ws_breaks = [
         d for d in drifts
-        if d.drift_type.value == "cross_workspace_break"
+        if d.drift_type is DriftType.CROSS_WORKSPACE_BREAK
     ]
     if ws_breaks:
         impacted_ws = sorted({d.workspace for d in ws_breaks if d.workspace})

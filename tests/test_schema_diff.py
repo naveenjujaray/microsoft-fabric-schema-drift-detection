@@ -311,3 +311,14 @@ def test_rename_different_base_types_never_pair():
     assert _detect_renames(
         {"a": _col("a", dtype="INTEGER")}, {"a2": _col("a2", dtype="VARCHAR")}
     ) == []
+
+
+def test_vanished_layer_reports_all_tables_dropped(silver_baseline):
+    """Baseline layer absent from the current snapshot must scream, not skip."""
+    from src.schema_diff import diff_all
+
+    drifts = diff_all({Layer.SILVER: silver_baseline}, {})
+    assert len(drifts) == len(silver_baseline.tables)
+    assert {d.drift_type for d in drifts} == {DriftType.TABLE_DROP}
+    assert all(d.severity is Severity.CRITICAL for d in drifts)
+    assert {d.table for d in drifts} == set(silver_baseline.tables)

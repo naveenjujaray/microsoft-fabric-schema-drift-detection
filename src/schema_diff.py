@@ -499,10 +499,28 @@ def diff_all(
     baselines: dict[Layer, LayerSchema],
     currents: dict[Layer, LayerSchema],
 ) -> list[DriftRecord]:
-    """Diff every layer present in both snapshots."""
+    """Diff every baselined layer against the current snapshot.
+
+    A layer that exists in the baseline but is absent from the current
+    snapshot (lakehouse deleted, semantic model removed, endpoint gone)
+    is NOT silently skipped: every table it contained is reported as a
+    critical ``table_drop`` - the most catastrophic drift there is.
+    """
     drifts: list[DriftRecord] = []
     for layer, base in baselines.items():
         cur = currents.get(layer)
         if cur is not None:
             drifts.extend(diff_layer(base, cur))
+            continue
+        for name in base.tables:
+            drifts.append(
+                DriftRecord(
+                    layer=layer,
+                    drift_type=DriftType.TABLE_DROP,
+                    severity=Severity.CRITICAL,
+                    table=name,
+                    old=name,
+                    new=None,
+                )
+            )
     return drifts
