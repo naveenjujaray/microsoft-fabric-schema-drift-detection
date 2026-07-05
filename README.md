@@ -7,7 +7,7 @@ with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack a
 
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-155%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen.svg)](#-tests)
 [![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
@@ -35,6 +35,17 @@ AdventureWorksLT (**simulate mode**) with zero capacity cost — same code path.
 pip install -r requirements.txt
 bash scripts/run_demo.sh
 ```
+
+Run the tests and quality gates any time:
+
+```bash
+pip install -e .[dev]     # pytest, ruff, mypy, bandit + type stubs
+pytest -q                 # 248 tests
+```
+
+Optional extras per integration: `pip install .[live]` (Fabric SQL
+endpoint via pyodbc) · `.[hana]` · `.[snowflake]` (direct-connect
+source drivers).
 
 Loads AdventureWorksLT → builds the medallion → snapshots baselines → injects six
 kinds of drift → prints the drift report, the PR it would open, and every notification
@@ -110,6 +121,44 @@ Impact analysis then reports the workspace name, artifact, workspace path and
 per-workspace blast radius — and states plainly: *"This schema change impacts
 assets across multiple Microsoft Fabric workspaces."* Tenant-boundary crossings
 are flagged too. Full guide: [docs/CROSS_WORKSPACE.md](docs/CROSS_WORKSPACE.md).
+
+## 🔌 Supported sources
+
+Two integration modes — pick per source:
+
+* **Already mirrored/shortcut into Fabric?** Use `mode: live` — the
+  `FabricBackend` sees it in the lakehouse. No source backend needed.
+* **Direct-connect upstream (`mode: source`)** — read schema straight
+  from the source system and catch drift **before** it lands in Fabric:
+  the Bronze-boundary contract.
+
+| Source | Mode | Status | Install |
+|---|---|---|---|
+| Fabric Lakehouse (Bronze/Silver/Gold) | live | ✅ shipped | — |
+| Fabric Warehouse (Gold) | live | ✅ shipped | `.[live]` for SQL endpoint |
+| Semantic model (TMDL) + PBIP reports | live | ✅ shipped | — |
+| Local DuckDB simulation | simulate | ✅ shipped | — |
+| **SAP HANA** | source | ✅ shipped | `.[hana]` |
+| **Snowflake** | source | ✅ shipped | `.[snowflake]` |
+| Databricks / Unity Catalog | source | 🙋 contributor wanted | — |
+| Azure SQL / SQL Server | source | 🙋 contributor wanted | — |
+| PostgreSQL (RDS/Aurora) | source | 🙋 contributor wanted | — |
+| AWS Redshift | source | 🙋 contributor wanted | — |
+| MySQL / Aurora MySQL | source | 🙋 contributor wanted | — |
+| Azure Cosmos DB | source | 🙋 wanted (advanced — schemaless) | — |
+
+A new backend is ~100 lines: connection factory + catalog query + type
+map on top of the shared SQL-catalog base, with cross-source **type
+normalization** so `NVARCHAR` vs `STRING` never reads as false drift.
+Per-source setup: [docs/BACKENDS.md](docs/BACKENDS.md) · claim one:
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+Lineage is data, not code: declare your own medallion's column mappings
+in a [lineage manifest](examples/lineage.example.yaml)
+(`lineage.manifest` in config.yaml); the AdventureWorksLT demo mappings
+are just the fallback. Scope the watch with `watch.layers` /
+`watch.mode: boundaries` (contract-enforced layers: only boundary
+breaks surface).
 
 ## 📖 Example story — the rename that would have reached the CFO
 
@@ -327,6 +376,8 @@ credential as Fabric — one app registration, one auth stack (permissions:
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module map, data flow, design decisions |
 | [docs/CROSS_WORKSPACE.md](docs/CROSS_WORKSPACE.md) | cross-workspace lineage: manifest format, link types, tenant boundaries |
+| [docs/BACKENDS.md](docs/BACKENDS.md) | per-source setup: drivers, auth, catalog queries, type normalization |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | add a source backend: the seam, the recipe, the contract-suite test bar |
 | [docs/AGENTS.md](docs/AGENTS.md) | the ten agents: tools, guard rails, examples, config |
 | [docs/FABRIC_SETUP.md](docs/FABRIC_SETUP.md) | verified `fab` CLI sequence to stand up the workspace + Graph permissions |
 | [docs/FABRIC_NATIVE.md](docs/FABRIC_NATIVE.md) | notebook / pipeline / `fab deploy` — running inside Fabric |
@@ -335,10 +386,12 @@ credential as Fabric — one app registration, one auth stack (permissions:
 ## ✅ Tests & quality gates
 
 ```bash
-pytest                    # 155 tests: differ (15 drift types), deterministic
+pytest                    # 248 tests: differ (15 drift types), deterministic
                           # rename matching, cross-workspace lineage, baseline
                           # fail-loud policy, REST retry/backoff, git handler
-                          # security guards, agents, notifications, backends
+                          # security guards, agents, notifications, lineage
+                          # manifest, watch scope, type normalization, and the
+                          # backend contract suite (Local/HANA/Snowflake)
 ruff check .              # lint (incl. bugbear + security rules)
 mypy                      # strict-leaning type check, 0 errors
 bandit -c pyproject.toml -r src main.py   # security scan
