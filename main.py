@@ -46,7 +46,7 @@ EXIT_BASELINE_ERROR = 3
 
 
 def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
-    """Backend factory: identical downstream code path either way."""
+    """Backend factory: identical downstream code path for every mode."""
     if mode == "live":
         import os
 
@@ -61,16 +61,35 @@ def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
             cfg.get("fabric", {}),
             reports_dir=cfg.get("git", {}).get("reports_dir", "pbip_reports"),
         )
-    from src.backends.local_backend import LocalBackend
 
-    sim = cfg.get("simulate", {})
-    return LocalBackend(
-        db_path=sim.get("db_path", "sample_data/warehouse.duckdb"),
-        semantic_model_path=sim.get(
-            "semantic_model_path", "sample_data/generated/semantic_model.json"
-        ),
-        reports_path=sim.get("reports_path", "sample_data/generated/reports.json"),
-    )
+    if mode == "simulate":
+        from src.backends.local_backend import LocalBackend
+
+        sim = cfg.get("simulate", {})
+        return LocalBackend(
+            db_path=sim.get("db_path", "sample_data/warehouse.duckdb"),
+            semantic_model_path=sim.get(
+                "semantic_model_path",
+                "sample_data/generated/semantic_model.json",
+            ),
+            reports_path=sim.get(
+                "reports_path", "sample_data/generated/reports.json"
+            ),
+        )
+
+    # direct-connect upstream sources: mode "source" reads source.type,
+    # or the mode itself names a registered source type ("hana", ...)
+    from src.backends import SOURCE_BACKENDS, make_source_backend
+
+    source_cfg = dict(cfg.get("source", {}))
+    if mode != "source":
+        if mode not in SOURCE_BACKENDS:
+            raise ValueError(
+                f"unknown mode {mode!r}; expected live, simulate, source, "
+                f"or one of {sorted(SOURCE_BACKENDS)}"
+            )
+        source_cfg["type"] = mode
+    return make_source_backend(source_cfg)
 
 
 def capture_baseline(backend: SchemaBackend, store: SchemaStore) -> None:
@@ -283,8 +302,11 @@ def print_provisioning() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Fabric Schema Drift Detective")
-    parser.add_argument("--mode", choices=["live", "simulate"], default=None,
-                        help="override config.yaml mode")
+    parser.add_argument("--mode", default=None,
+                        help="override config.yaml mode: live | simulate | "
+                             "source (direct-connect upstream via the "
+                             "source: config block, or the source type "
+                             "directly, e.g. hana / snowflake)")
     parser.add_argument("--once", action="store_true", help="run one cycle")
     parser.add_argument("--baseline", action="store_true",
                         help="capture/refresh baseline snapshots")
