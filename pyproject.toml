@@ -1,6 +1,6 @@
 [project]
 name = "fabric-schema-drift-detective"
-version = "0.2.0"
+version = "0.1.0"
 description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis and cross-workspace lineage"
 readme = "README.md"
 requires-python = ">=3.10"
