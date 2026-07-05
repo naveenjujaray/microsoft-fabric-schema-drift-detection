@@ -1,0 +1,123 @@
+"""SqlCatalogBackend: catalog rows -> LayerSchema, via a fake DBAPI conn."""
+
+from __future__ import annotations
+
+import pytest
+
+from src.backends.base import Layer
+from src.backends.sql_catalog_base import CatalogQuery, SqlCatalogBackend
+from src.backends.type_normalize import ANSI_TYPE_MAP, TypeNormalizer
+from tests.backends.backend_contract import SchemaBackendContract
+
+ROWS = [
+    # (table, column, dtype, nullable, ordinal)
+    ("Customer", "CustomerID", "INTEGER", "NO", 1),
+    ("Customer", "Email", "NVARCHAR(120)", "YES", 2),
+    ("Orders", "OrderID", "BIGINT", "NO", 1),
+    ("Orders", "Total", "DECIMAL(19,4)", "YES", 2),
+]
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+        self.executed: list[tuple[str, tuple]] = []
+
+    def execute(self, sql, params=()):
+        self.executed.append((sql, tuple(params)))
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class FakeConnection:
+    def __init__(self, rows):
+        self.cursor_obj = FakeCursor(rows)
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def close(self):
+        self.closed = True
+
+
+def _backend(rows=ROWS, layer=Layer.BRONZE):
+    connections: list[FakeConnection] = []
+
+    def factory():
+        con = FakeConnection(rows)
+        connections.append(con)
+        return con
+
+    backend = SqlCatalogBackend(
+        connection_factory=factory,
+        catalog_query=CatalogQuery(
+            sql="SELECT ... WHERE schema = ?", params=("MYSCHEMA",)
+        ),
+        normalizer=TypeNormalizer(ANSI_TYPE_MAP, source="fake"),
+        layer=layer,
+    )
+    return backend, connections
+
+
+def test_rows_become_layer_schema():
+    backend, _ = _backend()
+    schema = backend.get_schema(Layer.BRONZE)
+    assert set(schema.tables) == {"Customer", "Orders"}
+    email = schema.tables["Customer"].columns["Email"]
+    assert email.dtype == "string(120)"   # normalized, params preserved
+    assert email.nullable is True
+    assert email.ordinal == 2
+    cid = schema.tables["Customer"].columns["CustomerID"]
+    assert cid.dtype == "int"
+    assert cid.nullable is False
+
+
+def test_query_executed_with_params_and_connection_closed():
+    backend, connections = _backend()
+    backend.get_schema(Layer.BRONZE)
+    assert len(connections) == 1
+    assert connections[0].closed
+    sql, params = connections[0].cursor_obj.executed[0]
+    assert params == ("MYSCHEMA",)
+
+
+def test_wrong_layer_rejected():
+    backend, _ = _backend()
+    with pytest.raises(ValueError, match="gold"):
+        backend.get_schema(Layer.GOLD)
+
+
+def test_configurable_layer():
+    backend, _ = _backend(layer=Layer.SILVER)
+    assert backend.list_layers() == [Layer.SILVER]
+    assert backend.get_schema(Layer.SILVER).layer is Layer.SILVER
+
+
+def test_nullable_parsing_accepts_common_forms():
+    rows = [
+        ("T", "a", "INTEGER", "YES", 1),
+        ("T", "b", "INTEGER", "TRUE", 2),
+        ("T", "c", "INTEGER", True, 3),
+        ("T", "d", "INTEGER", 1, 4),
+        ("T", "e", "INTEGER", "NO", 5),
+        ("T", "f", "INTEGER", False, 6),
+    ]
+    backend, _ = _backend(rows=rows)
+    cols = backend.get_schema(Layer.BRONZE).tables["T"].columns
+    assert [cols[c].nullable for c in "abcdef"] == [
+        True, True, True, True, False, False,
+    ]
+
+
+class TestSqlCatalogBackendContract(SchemaBackendContract):
+    """The base itself passes the shared backend contract."""
+
+    @pytest.fixture
+    def backend(self):
+        return _backend()[0]
+
+    @pytest.fixture
+    def empty_backend(self):
+        return _backend(rows=[])[0]
