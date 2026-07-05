@@ -25,6 +25,9 @@ fabric:
   workspace_id: ""        # GUID of the Fabric workspace
   lakehouse_id: ""        # Bronze+Silver lakehouse item id
   warehouse_id: ""        # Gold warehouse item id
+  # Where the Gold star schema lives: warehouse (default, dbo schema)
+  # or lakehouse (gold schema / gold_ table prefix on the lakehouse)
+  gold_source: "warehouse"
   semantic_model_id: ""   # semantic model item id
   dataflow_ids: []        # Dataflow Gen2 item ids
   pipeline_ids: []        # Data pipeline item ids

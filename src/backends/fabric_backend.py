@@ -44,6 +44,14 @@ class FabricBackend(SchemaBackend):
         self.lakehouse_id = fabric_config.get("lakehouse_id", "")
         self.warehouse_id = fabric_config.get("warehouse_id", "")
         self.semantic_model_id = fabric_config.get("semantic_model_id", "")
+        self.gold_source = str(
+            fabric_config.get("gold_source", "warehouse")
+        ).strip().lower()
+        if self.gold_source not in ("warehouse", "lakehouse"):
+            raise ValueError(
+                f"fabric.gold_source must be 'warehouse' or 'lakehouse', "
+                f"got {self.gold_source!r}"
+            )
         self.reports_dir = Path(reports_dir)
         self.cli = FabricCLI()
         self.rest = FabricRest(api_base=fabric_config.get(
@@ -57,7 +65,7 @@ class FabricBackend(SchemaBackend):
     # ------------------------------------------------------------------
     def list_layers(self) -> list[Layer]:
         layers = [Layer.BRONZE, Layer.SILVER]
-        if self.warehouse_id:
+        if self._gold_available():
             layers.append(Layer.GOLD)
         if self.semantic_model_id:
             layers.append(Layer.SEMANTIC_MODEL)
@@ -69,7 +77,7 @@ class FabricBackend(SchemaBackend):
         if layer in (Layer.BRONZE, Layer.SILVER):
             return self._lakehouse_layer(layer)
         if layer is Layer.GOLD:
-            return self._warehouse_layer()
+            return self._gold_layer()
         if layer is Layer.SEMANTIC_MODEL:
             return self._semantic_model_layer()
         if layer is Layer.REPORTS:
@@ -102,7 +110,22 @@ class FabricBackend(SchemaBackend):
             result.tables[table.name] = table
         return result
 
-    def _warehouse_layer(self) -> LayerSchema:
+    def _gold_available(self) -> bool:
+        if self.gold_source == "lakehouse":
+            return bool(self.lakehouse_id or self.cfg.get("sql_endpoint", ""))
+        return bool(self.warehouse_id)
+
+    def _gold_layer(self) -> LayerSchema:
+        """Gold star schema — Warehouse (default) or Lakehouse.
+
+        ``fabric.gold_source: lakehouse`` covers shops that build Gold
+        in a lakehouse instead of a warehouse: same SQL analytics
+        endpoint, ``gold`` schema (or ``gold_`` table prefix via REST)
+        instead of the warehouse's ``dbo``. Lineage is item-type
+        agnostic, so nothing downstream changes.
+        """
+        if self.gold_source == "lakehouse":
+            return self._lakehouse_layer(Layer.GOLD)
         sql_endpoint = self.cfg.get("sql_endpoint", "")
         if not sql_endpoint:
             logger.warning("no sql_endpoint configured; Gold schema will be empty")
