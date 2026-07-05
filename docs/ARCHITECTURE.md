@@ -30,14 +30,22 @@ src/
                             INFORMATION_SCHEMA, TMDL parsing, PBIP scanning
   fabric_cli.py             `fab` wrapper (single mockable run() choke point)
   fabric_rest.py            Fabric REST: items, lakehouse tables, semantic-model
-                            getDefinition (LRO polling), SQL endpoint via pyodbc
+                            getDefinition (LRO polling), SQL endpoint via pyodbc;
+                            retries with exponential backoff + jitter on
+                            429/408/5xx and connection failures
   medallion.py              Bronze->Silver->Gold column mappings (single source
                             of truth for transforms AND lineage)
-  schema_diff.py            drift engine: 14 drift types, rename heuristics,
+  schema_diff.py            drift engine: 15 drift types, deterministic rename
+                            matching (stable matching + confidence scores),
                             cast-safety classification
   lineage.py                LineageGraph, DAX Table[Column] parsing,
-                            annotate_downstream() -> cross_layer_break records
-  schema_store.py           baseline JSON snapshots per layer
+                            annotate_downstream() -> cross_layer_break and
+                            cross_workspace_break records
+  workspace.py              WorkspaceRegistry: JSON manifest of workspaces,
+                            items, tenants and cross-workspace links
+                            (docs/CROSS_WORKSPACE.md)
+  schema_store.py           baseline JSON snapshots per layer (atomic writes,
+                            corrupt files fail loudly)
   llm_reasoner.py           ClaudeReasoner (anthropic SDK, retries/backoff,
                             defensive JSON parsing) + MockReasoner
   git_handler.py            branch, apply TMDL find/replace fixes, PR via gh
@@ -68,10 +76,18 @@ sample_data/
 ## Data flow of one cycle (`main.run_once`)
 
 1. Backend snapshots all available layers into `LayerSchema` dataclasses.
-2. `SchemaStore` loads the baseline snapshots (first run captures them instead).
+2. `SchemaStore` loads the baseline snapshots. Missing or corrupt baselines
+   **fail loudly** (`BaselineError`, exit code 3) — they are never silently
+   recreated, because recapturing would swallow whatever drifted since the
+   file vanished. Baselines are only written by an explicit `--baseline` run
+   (atomic temp-file+rename writes).
 3. `schema_diff.diff_all` produces per-layer `DriftRecord`s:
    - drop+add pairs are re-classified as **renames** when base type matches and
-     ordinal position or name similarity (difflib ≥ 0.55) agrees;
+     ordinal position or name similarity (difflib ≥ 0.55) agrees; the pairing
+     is a deterministic Gale–Shapley **stable matching** over confidence
+     scores (name similarity + position + exact type + nullability + key
+     agreement) with lexicographic tie-breakers, and each rename carries its
+     confidence;
    - type changes are **warning** when the cast is widening/safe
      (`INTEGER→BIGINT`), **critical** otherwise (`DECIMAL→VARCHAR`);
    - same-base-type declarations with different params (`DECIMAL(19,4)→
@@ -89,22 +105,39 @@ sample_data/
    - model columns/measures→report bindings from PBIP metadata.
 5. `lineage.annotate_downstream` BFS-walks each breaking drift, fills
    `downstream_impact`, and synthesizes `cross_layer_break` records for
-   impacted nodes in *other* layers (deduped).
+   impacted nodes in *other* layers (deduped). With a workspace manifest
+   configured (`lineage.workspaces_manifest`), targets in a *different
+   workspace* become **`cross_workspace_break`** records instead, annotated
+   with the connecting link type (shortcut, OneLake shortcut, mirrored
+   database, semantic-model binding…) and tenant boundary — see
+   [CROSS_WORKSPACE.md](CROSS_WORKSPACE.md).
 6. `llm_reasoner` (Claude or mock): impact JSON → severity adjustments,
    fix suggestions (exact TMDL find/replace), PR title/body/commit message.
+   Analyses include workspace name, workspace path and per-workspace blast
+   radius; multi-workspace impact is called out explicitly in the summary.
 7. `git_handler` branches (`drift-fix/<timestamp>`), applies fixes under the
    configured PBIP folder, commits, pushes, opens the PR (gh CLI → REST
    fallback). Never touches the base branch. Dry-run prints instead.
 8. `notifications.dispatcher` renders the single `DriftAlert` per channel and
    sends; failures are isolated and reported per channel.
 
-Exit code is 1 when critical drifts exist — usable as a CI gate.
+Exit codes: `0` clean · `1` critical drift (CI gate) · `2` config error ·
+`3` missing/corrupt baselines.
 
 ## Key decisions
 
-* **Rename detection is heuristic by design.** Same-type + same-position or
-  similar-name covers the common "rename in a transform" case; ambiguous pairs
-  fall back to drop+add (safe: more severe, never less).
+* **Rename detection is heuristic by design — but deterministic.** Same-type +
+  same-position or similar-name covers the common "rename in a transform"
+  case; ambiguous pairs fall back to drop+add (safe: more severe, never
+  less). The stable-matching pairing guarantees identical inputs always
+  produce identical rename pairs, independent of dict ordering.
+* **Baselines fail loudly.** A missing baseline could mean tampering or an
+  operational mistake — either way, silently recapturing it would erase the
+  very evidence a drift detector exists to keep. Recreation is an explicit
+  operator action.
+* **Cross-workspace topology is declarative.** The workspace manifest is a
+  reviewed JSON document, not runtime API discovery — the lineage engine's
+  claims about which workspace breaks stay auditable.
 * **The mapping tables in `medallion.py` are the transformation contract.**
   `build_medallion.py` generates its SQL *from the same names*, so the lineage
   graph can't drift from the transforms in simulate mode. In live mode the

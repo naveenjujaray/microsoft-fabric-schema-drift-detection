@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from tenacity import (
     retry,
@@ -33,9 +33,17 @@ from .prompts import (
     FIX_SUGGESTION_PROMPT,
     IMPACT_ANALYSIS_PROMPT,
 )
-from .schema_diff import DriftRecord
+from .schema_diff import DriftRecord, DriftType
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .workspace import WorkspaceRegistry
 
 logger = logging.getLogger(__name__)
+
+CROSS_WORKSPACE_SENTENCE = (
+    "This schema change impacts assets across multiple Microsoft Fabric "
+    "workspaces."
+)
 
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
@@ -49,13 +57,17 @@ def parse_llm_json(text: str) -> dict[str, Any]:
     """
     cleaned = _JSON_FENCE.sub("", text).strip()
     try:
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
         pass
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start != -1 and end > start:
         try:
-            return json.loads(cleaned[start : end + 1])
+            parsed = json.loads(cleaned[start : end + 1])
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
             pass
     logger.warning("LLM returned unparseable JSON; using empty result")
@@ -75,6 +87,51 @@ def _lineage_json(drifts: list[DriftRecord]) -> str:
         },
         indent=2,
     )
+
+
+def _workspace_json(workspaces: WorkspaceRegistry | None) -> str:
+    """Compact topology description for the impact prompt."""
+    if workspaces is None:
+        return "{}"
+    return json.dumps(
+        {
+            "tenant_id": workspaces.tenant_id,
+            "workspaces": [
+                {
+                    "name": ws.name,
+                    "workspace_id": ws.workspace_id,
+                    "tenant_id": ws.tenant_id,
+                    "items": [
+                        {
+                            "name": item.name,
+                            "type": item.item_type,
+                            "item_id": item.item_id,
+                            "layers": [layer.value for layer in item.layers],
+                        }
+                        for item in ws.items
+                    ],
+                }
+                for ws in workspaces.workspaces
+            ],
+            "links": [
+                {
+                    "type": link.link_type,
+                    "from": f"{link.src_workspace}:{link.src_layer.value}",
+                    "to": f"{link.dst_workspace}:{link.dst_layer.value}",
+                }
+                for link in workspaces.links
+            ],
+        },
+        indent=2,
+    )
+
+
+def _primary_node(d: DriftRecord) -> str:
+    if d.column and not d.column.startswith("[measure] "):
+        return f"{d.layer.value}:{d.table}.{d.column}"
+    if d.column:
+        return f"{d.layer.value}:{d.table}#{d.column.removeprefix('[measure] ')}"
+    return f"{d.layer.value}:{d.table}"
 
 
 class Reasoner(Protocol):
@@ -116,12 +173,14 @@ class ClaudeReasoner:
         max_tokens: int = 4096,
         max_retries: int = 3,
         api_key: str | None = None,
+        workspaces: WorkspaceRegistry | None = None,
     ) -> None:
         import anthropic
 
         self.model = model
         self.max_tokens = max_tokens
         self.max_retries = max_retries
+        self.workspaces = workspaces
         self.client = anthropic.Anthropic(
             api_key=api_key or os.environ.get("ANTHROPIC_API_KEY")
         )
@@ -148,7 +207,9 @@ class ClaudeReasoner:
     # ------------------------------------------------------------------
     def analyze_impact(self, drifts: list[DriftRecord]) -> dict[str, Any]:
         prompt = IMPACT_ANALYSIS_PROMPT.format(
-            drifts_json=_drifts_json(drifts), lineage_json=_lineage_json(drifts)
+            drifts_json=_drifts_json(drifts),
+            lineage_json=_lineage_json(drifts),
+            workspace_json=_workspace_json(self.workspaces),
         )
         return parse_llm_json(self._complete(prompt))
 
@@ -175,6 +236,9 @@ class ClaudeReasoner:
 class MockReasoner:
     """Deterministic reasoner for demos/tests: no API key, no network."""
 
+    def __init__(self, workspaces: WorkspaceRegistry | None = None) -> None:
+        self.workspaces = workspaces
+
     def analyze_impact(self, drifts: list[DriftRecord]) -> dict[str, Any]:
         analyses = []
         for i, d in enumerate(drifts):
@@ -185,33 +249,51 @@ class MockReasoner:
                     if n.startswith("reports:")
                 }
             )
-            analyses.append(
-                {
-                    "drift_index": i,
-                    "severity": d.severity.value,
-                    "impact": (
-                        f"{d.drift_type.value} on {d.layer.value}."
-                        f"{d.table}.{d.column or '*'} affects "
-                        f"{len(d.downstream_impact)} downstream asset(s)."
-                    ),
-                    "affected_reports": reports,
-                    "fixable": "yes" if d.auto_fixable else "no",
-                    "recommended_action": (
-                        "Propagate change downstream via PR"
-                        if d.auto_fixable
-                        else "Escalate to data engineering for manual fix"
-                    ),
-                }
-            )
+            analysis: dict[str, Any] = {
+                "drift_index": i,
+                "severity": d.severity.value,
+                "impact": (
+                    f"{d.drift_type.value} on {d.layer.value}."
+                    f"{d.table}.{d.column or '*'} affects "
+                    f"{len(d.downstream_impact)} downstream asset(s)."
+                ),
+                "affected_reports": reports,
+                "fixable": "yes" if d.auto_fixable else "no",
+                "recommended_action": (
+                    "Propagate change downstream via PR"
+                    if d.auto_fixable
+                    else "Escalate to data engineering for manual fix"
+                ),
+                "workspace": d.workspace,
+            }
+            if self.workspaces is not None:
+                radius = self.workspaces.blast_radius(d.downstream_impact)
+                analysis["workspace_path"] = self.workspaces.workspace_path(
+                    _primary_node(d)
+                )
+                analysis["affected_workspaces"] = [
+                    {"workspace": name, "assets": count}
+                    for name, count in radius.items()
+                ]
+            analyses.append(analysis)
+
         critical = sum(1 for d in drifts if d.severity.value == "critical")
-        return {
-            "analyses": analyses,
-            "summary": (
-                f"{len(drifts)} drift(s) detected, {critical} critical. "
-                "Cross-layer lineage identifies impacted Gold tables, DAX "
-                "measures and Power BI reports; see analyses for detail."
-            ),
-        }
+        summary = (
+            f"{len(drifts)} drift(s) detected, {critical} critical. "
+            "Cross-layer lineage identifies impacted Gold tables, DAX "
+            "measures and Power BI reports; see analyses for detail."
+        )
+        impacted_workspaces = {d.workspace for d in drifts if d.workspace}
+        has_ws_break = any(
+            d.drift_type is DriftType.CROSS_WORKSPACE_BREAK for d in drifts
+        )
+        if has_ws_break or len(impacted_workspaces) > 1:
+            names = ", ".join(sorted(impacted_workspaces))
+            summary += (
+                f" {CROSS_WORKSPACE_SENTENCE}"
+                f" Impacted workspaces: {names}."
+            )
+        return {"analyses": analyses, "summary": summary}
 
     def suggest_fixes(
         self, drifts: list[DriftRecord], tmdl_excerpt: str
@@ -263,7 +345,10 @@ class MockReasoner:
         }
 
 
-def make_reasoner(llm_config: dict[str, Any]) -> Reasoner:
+def make_reasoner(
+    llm_config: dict[str, Any],
+    workspaces: WorkspaceRegistry | None = None,
+) -> Reasoner:
     """Factory: Claude if enabled + key present, else the mock."""
     enabled = llm_config.get("enabled", True)
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -272,7 +357,8 @@ def make_reasoner(llm_config: dict[str, Any]) -> Reasoner:
             model=llm_config.get("model", "claude-opus-4-6"),
             max_tokens=int(llm_config.get("max_tokens", 4096)),
             max_retries=int(llm_config.get("max_retries", 3)),
+            workspaces=workspaces,
         )
     if enabled and not has_key:
         logger.warning("ANTHROPIC_API_KEY not set; falling back to MockReasoner")
-    return MockReasoner()
+    return MockReasoner(workspaces=workspaces)

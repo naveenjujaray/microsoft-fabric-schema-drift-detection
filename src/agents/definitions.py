@@ -6,7 +6,7 @@ are generic; nothing else changes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,8 @@ replace per fix).""",
            "query_lineage", "git_status"),
     max_turns=20,
     needs_writes=True,
-    default_task="Detect current drift and repair everything auto-fixable, verifying after each fix.",
+    default_task=("Detect current drift and repair everything "
+                  "auto-fixable, verifying after each fix."),
 ))
 
 # 2 ------------------------------------------------------------------
@@ -105,7 +106,8 @@ and DAX only, and say so.""",
     tools=("run_diff", "get_schema", "profile_column", "sample_rows",
            "grep_dax", "query_lineage", "run_sql"),
     max_turns=15,
-    default_task="Investigate current drift and give evidence-backed verdicts for anything ambiguous.",
+    default_task=("Investigate current drift and give evidence-backed "
+                  "verdicts for anything ambiguous."),
 ))
 
 # 3 ------------------------------------------------------------------
@@ -124,10 +126,14 @@ count_downstream_reports for the blast radius. For provenance questions
 ('where does X come from'): query_lineage upstream. Enrich with
 grep_dax / read_report_metadata when measures or reports are involved.
 
+When a workspace manifest is configured, use workspace_map to state
+WHICH Microsoft Fabric workspace each impacted asset lives in and the
+per-workspace blast radius - cross-workspace impact matters most.
+
 Answer with: direct answer first, then the evidence chain
 (node -> node -> node), then affected reports/measures as a short list.""",
     tools=("list_lineage_nodes", "query_lineage", "count_downstream_reports",
-           "grep_dax", "read_report_metadata", "get_schema"),
+           "grep_dax", "read_report_metadata", "get_schema", "workspace_map"),
     max_turns=10,
 ))
 
@@ -157,7 +163,8 @@ group symptoms under their shared root.""",
     tools=("run_diff", "query_lineage", "list_lineage_nodes", "get_schema",
            "profile_column", "sample_rows", "grep_dax"),
     max_turns=15,
-    default_task="Trace every current cross-layer break to its root cause and group symptoms by root.",
+    default_task=("Trace every current cross-layer break to its root "
+                  "cause and group symptoms by root."),
 ))
 
 # 5 ------------------------------------------------------------------
@@ -180,9 +187,12 @@ Role: incident triage for schema drift.
    auto-fixable or human-needed.
 
 Tie-breakers: revenue-related measures > customer-facing reports >
-internal. Auto-fixable items that unblock many symptoms float up.""",
+internal. Auto-fixable items that unblock many symptoms float up.
+Drift that breaks assets in OTHER workspaces (cross_workspace_break)
+outranks same-workspace breakage of similar size - use workspace_map
+for the per-workspace blast radius.""",
     tools=("run_diff", "count_downstream_reports", "read_report_metadata",
-           "query_lineage", "grep_dax"),
+           "query_lineage", "grep_dax", "workspace_map"),
     max_turns=12,
     default_task="Triage current drift into a prioritized fix queue.",
 ))
@@ -325,5 +335,6 @@ You can only PREVIEW. Sending stays with the deterministic dispatcher.""",
     tools=("run_diff", "count_downstream_reports", "read_report_metadata",
            "preview_notification", "query_lineage"),
     max_turns=12,
-    default_task="Compose engineer (slack) and executive (outlook) notifications for the current drift.",
+    default_task=("Compose engineer (slack) and executive (outlook) "
+                  "notifications for the current drift."),
 ))

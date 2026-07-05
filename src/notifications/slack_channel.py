@@ -22,7 +22,8 @@ class SlackChannel(NotificationChannel):
         self,
         mode: str = "webhook",
         webhook_url: str = "",
-        bot_token: str = "",
+        # empty default is a disabled-channel sentinel, not a secret
+        bot_token: str = "",  # noqa: S107 # nosec B107
         channel: str = "#data-alerts",
         timeout: int = 15,
     ) -> None:

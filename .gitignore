@@ -9,3 +9,7 @@ sample_data/generated/
 *.egg-info/
 dist/
 build/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

@@ -1,14 +1,106 @@
 [project]
 name = "fabric-schema-drift-detective"
-version = "0.1.0"
-description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis"
+version = "0.2.0"
+description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis and cross-workspace lineage"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Naveen Jujaray" }]
+keywords = [
+    "microsoft-fabric", "schema-drift", "data-lineage", "medallion",
+    "power-bi", "data-quality", "claude",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "anthropic>=0.39.0",
+    "azure-identity>=1.19.0",
+    "requests>=2.32.0",
+    "PyYAML>=6.0.2",
+    "duckdb>=1.1.0",
+    "rich>=13.9.0",
+    "python-dotenv>=1.0.1",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+live = ["pyodbc>=5.1.0"]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-mock>=3.14.0",
+    "pytest-cov>=5.0.0",
+    "mypy>=1.11.0",
+    "ruff>=0.6.0",
+    "bandit>=1.7.9",
+    "types-PyYAML",
+    "types-requests",
+]
+
+[project.urls]
+Repository = "https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
+[tool.coverage.run]
+source = ["src", "main.py"]
+omit = ["src/agents/definitions.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+
 [tool.ruff]
 line-length = 90
+target-version = "py310"
+# Fabric notebook source uses cell-magic sections: imports cannot be
+# top-of-file and /tmp paths are the notebook runtime's working dir.
+extend-exclude = ["fabric"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = [
+    "S101",  # assert use: fine in this codebase (invariants + tests)
+    "S603",  # subprocess without shell=True is the safe form we use
+    "S607",  # git/gh/fab resolved from PATH by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "E402", "E501"]
+"sample_data/*" = ["S"]
+
+[tool.bandit]
+# B311: random used only for retry jitter (not crypto)
+# B404/B603/B607: subprocess used in list form without shell, executables
+#                 (git/gh/fab) resolved from PATH by design
+# B608: SQL built only from _qident-validated identifiers or keyword-
+#       filtered SELECTs against a read-only DuckDB connection
+skips = ["B311", "B404", "B603", "B607", "B608"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "main.py"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true  # notebookutils, pyodbc, anthropic optionals
+
+[[tool.mypy.overrides]]
+module = "sample_data.*"
+ignore_errors = true

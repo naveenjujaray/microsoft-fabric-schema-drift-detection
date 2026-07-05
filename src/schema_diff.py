@@ -8,11 +8,12 @@ Drift types:
     column_drop, column_add, type_change, precision_scale_change,
     column_rename, column_reorder, nullability_change, table_drop,
     table_add, key_change, measure_drop, measure_add, measure_change,
-    cross_layer_break
+    cross_layer_break, cross_workspace_break
 """
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import Enum
@@ -36,6 +37,7 @@ class DriftType(str, Enum):
     MEASURE_ADD = "measure_add"
     MEASURE_CHANGE = "measure_change"
     CROSS_LAYER_BREAK = "cross_layer_break"
+    CROSS_WORKSPACE_BREAK = "cross_workspace_break"
 
 
 class Severity(str, Enum):
@@ -73,6 +75,8 @@ class DriftRecord:
     new: Any = None
     downstream_impact: list[str] = field(default_factory=list)
     auto_fixable: bool = False
+    confidence: float | None = None  # heuristic confidence (renames), 0..1
+    workspace: str | None = None  # owning workspace name, if known
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +89,8 @@ class DriftRecord:
             "new": self.new,
             "downstream_impact": list(self.downstream_impact),
             "auto_fixable": self.auto_fixable,
+            "confidence": self.confidence,
+            "workspace": self.workspace,
         }
 
     def describe(self) -> str:
@@ -146,7 +152,7 @@ def _precision_delta(old_dtype: str, new_dtype: str) -> str:
     width = max(len(o), len(n))
     o = o + (0,) * (width - len(o))
     n = n + (0,) * (width - len(n))
-    return "widen" if all(nn >= oo for oo, nn in zip(o, n)) else "narrow"
+    return "widen" if all(nn >= oo for oo, nn in zip(o, n, strict=True)) else "narrow"
 
 
 def _normalize_dax(expr: str) -> str:
@@ -163,39 +169,108 @@ def _name_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+def _rename_confidence(old: ColumnSchema, new: ColumnSchema) -> float:
+    """Confidence (0..1) that ``old`` was renamed to ``new``.
+
+    Weighted evidence: name similarity dominates, positional identity
+    is strong, and matching type parameters / nullability / key flag
+    each add supporting signal. Base types must already match.
+    """
+    sim = _name_similarity(old.name, new.name)
+    positional = old.ordinal == new.ordinal
+    exact_type = old.dtype == new.dtype  # includes precision/scale/length
+    score = (
+        0.55 * sim
+        + (0.20 if positional else 0.0)
+        + (0.10 if exact_type else 0.0)
+        + (0.075 if old.nullable == new.nullable else 0.0)
+        + (0.075 if old.is_key == new.is_key else 0.0)
+    )
+    return round(min(score, 1.0), 4)
+
+
 def _detect_renames(
     dropped: dict[str, ColumnSchema],
     added: dict[str, ColumnSchema],
     threshold: float = 0.55,
-) -> list[tuple[ColumnSchema, ColumnSchema]]:
+) -> list[tuple[ColumnSchema, ColumnSchema, float]]:
     """Pair dropped+added columns that are probably renames.
 
-    Heuristics: identical type AND (same ordinal position OR name
-    similarity above threshold). Each column used at most once,
-    best-scoring pairs first.
+    Eligibility: identical base type AND (same ordinal position OR name
+    similarity >= ``threshold``) - same heuristics as before, but the
+    pairing itself is now a deterministic *stable matching*
+    (Gale-Shapley) over confidence scores:
+
+    * both sides rank partners by confidence, ties broken
+      lexicographically by column name - so the result never depends
+      on dict insertion order;
+    * the matching is stable: no dropped/added pair both prefer each
+      other over their assigned partners;
+    * each returned pair carries its confidence score.
+
+    Returns ``(old, new, confidence)`` tuples ordered by old name.
     """
-    candidates: list[tuple[float, ColumnSchema, ColumnSchema]] = []
+    # eligible pair -> confidence
+    scores: dict[tuple[str, str], float] = {}
     for old in dropped.values():
         for new in added.values():
             if _base_type(old.dtype) != _base_type(new.dtype):
                 continue
-            sim = _name_similarity(old.name, new.name)
-            positional = old.ordinal == new.ordinal
-            if sim >= threshold or positional:
-                score = sim + (0.5 if positional else 0.0)
-                candidates.append((score, old, new))
-    candidates.sort(key=lambda c: c[0], reverse=True)
+            if (
+                _name_similarity(old.name, new.name) >= threshold
+                or old.ordinal == new.ordinal
+            ):
+                scores[(old.name, new.name)] = _rename_confidence(old, new)
+    if not scores:
+        return []
 
-    pairs: list[tuple[ColumnSchema, ColumnSchema]] = []
-    used_old: set[str] = set()
-    used_new: set[str] = set()
-    for _, old, new in candidates:
-        if old.name in used_old or new.name in used_new:
-            continue
-        pairs.append((old, new))
-        used_old.add(old.name)
-        used_new.add(new.name)
-    return pairs
+    # deterministic preference lists (higher confidence first, then name)
+    old_names = sorted({o for o, _ in scores})
+    new_names = sorted({n for _, n in scores})
+    old_prefs = {
+        o: sorted(
+            (n for n in new_names if (o, n) in scores),
+            key=lambda n: (-scores[(o, n)], n),
+        )
+        for o in old_names
+    }
+    new_rank = {
+        n: {
+            o: rank
+            for rank, o in enumerate(
+                sorted(
+                    (o for o in old_names if (o, n) in scores),
+                    key=lambda o: (-scores[(o, n)], o),
+                )
+            )
+        }
+        for n in new_names
+    }
+
+    # Gale-Shapley: dropped columns propose in lexicographic order
+    engaged: dict[str, str] = {}  # new -> old
+    next_choice = {o: 0 for o in old_names}
+    free = deque(old_names)
+    while free:
+        o = free.popleft()
+        prefs = old_prefs[o]
+        if next_choice[o] >= len(prefs):
+            continue  # exhausted all acceptable partners
+        n = prefs[next_choice[o]]
+        next_choice[o] += 1
+        current = engaged.get(n)
+        if current is None:
+            engaged[n] = o
+        elif new_rank[n][o] < new_rank[n][current]:
+            engaged[n] = o
+            free.append(current)
+        else:
+            free.append(o)
+
+    return [
+        (dropped[o], added[n], scores[(o, n)])
+        for n, o in sorted(engaged.items(), key=lambda kv: kv[1])
+    ]
 
 
 def _diff_table(
@@ -210,7 +285,7 @@ def _diff_table(
     added = {n: c for n, c in cur_cols.items() if n not in base_cols}
 
     # renames first: consume matched pairs so they aren't double-reported
-    for old_col, new_col in _detect_renames(dropped, added):
+    for old_col, new_col, confidence in _detect_renames(dropped, added):
         drifts.append(
             DriftRecord(
                 layer=layer,
@@ -221,6 +296,7 @@ def _diff_table(
                 old=old_col.name,
                 new=new_col.name,
                 auto_fixable=True,  # rename is mechanically fixable downstream
+                confidence=confidence,
             )
         )
         dropped.pop(old_col.name, None)
@@ -321,8 +397,12 @@ def _diff_table(
     # column reorder: rank *shared* columns by position in each snapshot so
     # adds/drops shifting absolute ordinals don't create false positives.
     # Breaks positional consumers (SELECT *, positional CSV/parquet binding).
-    base_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: base_cols[x].ordinal))}
-    cur_rank = {n: i for i, n in enumerate(sorted(shared, key=lambda x: cur_cols[x].ordinal))}
+    base_rank = {
+        n: i for i, n in enumerate(sorted(shared, key=lambda x: base_cols[x].ordinal))
+    }
+    cur_rank = {
+        n: i for i, n in enumerate(sorted(shared, key=lambda x: cur_cols[x].ordinal))
+    }
     for name in shared:
         if base_rank[name] != cur_rank[name]:
             drifts.append(
@@ -419,10 +499,28 @@ def diff_all(
     baselines: dict[Layer, LayerSchema],
     currents: dict[Layer, LayerSchema],
 ) -> list[DriftRecord]:
-    """Diff every layer present in both snapshots."""
+    """Diff every baselined layer against the current snapshot.
+
+    A layer that exists in the baseline but is absent from the current
+    snapshot (lakehouse deleted, semantic model removed, endpoint gone)
+    is NOT silently skipped: every table it contained is reported as a
+    critical ``table_drop`` - the most catastrophic drift there is.
+    """
     drifts: list[DriftRecord] = []
     for layer, base in baselines.items():
         cur = currents.get(layer)
         if cur is not None:
             drifts.extend(diff_layer(base, cur))
+            continue
+        for name in base.tables:
+            drifts.append(
+                DriftRecord(
+                    layer=layer,
+                    drift_type=DriftType.TABLE_DROP,
+                    severity=Severity.CRITICAL,
+                    table=name,
+                    old=name,
+                    new=None,
+                )
+            )
     return drifts

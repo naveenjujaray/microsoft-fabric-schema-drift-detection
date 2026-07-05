@@ -92,7 +92,7 @@ print("effective fabric config:",
 
 # -- run one detection cycle ----------------------------------------------
 from main import capture_baseline, make_backend, run_once
-from src.schema_store import SchemaStore
+from src.schema_store import BaselineError, SchemaStore
 
 if CAPTURE_BASELINE:
     capture_baseline(
@@ -101,7 +101,18 @@ if CAPTURE_BASELINE:
     )
     critical_count = 0
 else:
-    critical_count = run_once("live", cfg, dry_run=DRY_RUN, open_pr=False)
+    try:
+        critical_count = run_once("live", cfg, dry_run=DRY_RUN, open_pr=False)
+    except BaselineError as exc:
+        # Baselines are never recreated implicitly. On the very first run
+        # (or if the lakehouse baseline files were deleted) set
+        # CAPTURE_BASELINE = True above, run once, then flip it back.
+        raise RuntimeError(
+            f"Baseline error: {exc}\n"
+            "First run? Set CAPTURE_BASELINE = True, run this notebook "
+            "once to snapshot baselines into the lakehouse, then set it "
+            "back to False for drift detection."
+        ) from exc
 
 print(f"critical drifts: {critical_count}")
 

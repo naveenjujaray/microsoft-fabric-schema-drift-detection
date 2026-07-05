@@ -227,3 +227,98 @@ def test_diff_rejects_mismatched_layers(silver_baseline):
     other = LayerSchema(layer=Layer.GOLD)
     with pytest.raises(ValueError):
         diff_layer(silver_baseline, other)
+
+
+# ---------------------------------------------------------------------------
+# deterministic rename detection (stable matching + confidence)
+# ---------------------------------------------------------------------------
+from src.schema_diff import _detect_renames  # noqa: E402
+
+
+def _col(name, dtype="VARCHAR", nullable=True, ordinal=0, is_key=False):
+    return ColumnSchema(
+        name=name, dtype=dtype, nullable=nullable, ordinal=ordinal, is_key=is_key
+    )
+
+
+def test_rename_carries_confidence(silver_baseline):
+    cur = _clone(silver_baseline)
+    col = cur.tables["customers"].columns.pop("email")
+    cur.tables["customers"].columns["email_address"] = ColumnSchema(
+        name="email_address", dtype=col.dtype, nullable=col.nullable,
+        ordinal=col.ordinal,
+    )
+    drifts = diff_layer(silver_baseline, cur)
+    assert drifts[0].drift_type is DriftType.COLUMN_RENAME
+    assert drifts[0].confidence is not None
+    assert 0.5 < drifts[0].confidence <= 1.0
+
+
+def test_rename_matching_is_order_independent():
+    """Same pairs regardless of dict insertion order."""
+    dropped_a = {"email": _col("email", ordinal=1), "mail2": _col("mail2", ordinal=2)}
+    dropped_b = dict(reversed(list(dropped_a.items())))
+    added_a = {
+        "email_addr": _col("email_addr", ordinal=1),
+        "mail2_new": _col("mail2_new", ordinal=2),
+    }
+    added_b = dict(reversed(list(added_a.items())))
+
+    result_ab = [(o.name, n.name) for o, n, _ in _detect_renames(dropped_a, added_a)]
+    result_ba = [(o.name, n.name) for o, n, _ in _detect_renames(dropped_b, added_b)]
+    assert result_ab == result_ba
+    assert result_ab == [("email", "email_addr"), ("mail2", "mail2_new")]
+
+
+def test_rename_prefers_higher_confidence_partner():
+    """'email' must pair with the more similar 'email_address', leaving
+    'e_mail' for the positional partner - a greedy first-come pairing on
+    unsorted input could get this wrong."""
+    dropped = {
+        "email": _col("email", ordinal=1),
+        "phone": _col("phone", ordinal=2),
+    }
+    added = {
+        "phone_number": _col("phone_number", ordinal=2),
+        "email_address": _col("email_address", ordinal=1),
+    }
+    pairs = {(o.name, n.name) for o, n, _ in _detect_renames(dropped, added)}
+    assert pairs == {("email", "email_address"), ("phone", "phone_number")}
+
+
+def test_rename_lexicographic_tie_break():
+    """Two identical candidates: deterministic lexicographic assignment."""
+    dropped = {"col_b": _col("col_b", ordinal=5), "col_a": _col("col_a", ordinal=6)}
+    added = {"col_y": _col("col_y", ordinal=5), "col_x": _col("col_x", ordinal=6)}
+    result = [(o.name, n.name) for o, n, _ in _detect_renames(dropped, added)]
+    # positional matches pair 5->5 and 6->6; ordering of output by old name
+    assert result == [("col_a", "col_x"), ("col_b", "col_y")]
+
+
+def test_rename_exact_type_and_flags_raise_confidence():
+    exact = _detect_renames(
+        {"amount": _col("amount", dtype="DECIMAL(19,4)", nullable=False, ordinal=3)},
+        {"amount_usd": _col("amount_usd", dtype="DECIMAL(19,4)", nullable=False, ordinal=3)},
+    )[0][2]
+    weaker = _detect_renames(
+        {"amount": _col("amount", dtype="DECIMAL(19,4)", nullable=False, ordinal=3)},
+        {"amount_usd": _col("amount_usd", dtype="DECIMAL(10,2)", nullable=True, ordinal=3)},
+    )[0][2]
+    assert exact > weaker
+
+
+def test_rename_different_base_types_never_pair():
+    assert _detect_renames(
+        {"a": _col("a", dtype="INTEGER")}, {"a2": _col("a2", dtype="VARCHAR")}
+    ) == []
+
+
+def test_vanished_layer_reports_all_tables_dropped(silver_baseline):
+    """Baseline layer absent from the current snapshot must scream, not skip."""
+    from src.schema_diff import diff_all
+
+    drifts = diff_all({Layer.SILVER: silver_baseline}, {})
+    assert len(drifts) == len(silver_baseline.tables)
+    assert {d.drift_type for d in drifts} == {DriftType.TABLE_DROP}
+    assert all(d.severity is Severity.CRITICAL for d in drifts)
+    assert {d.table for d in drifts} == set(silver_baseline.tables)

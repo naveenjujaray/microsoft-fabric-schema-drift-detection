@@ -13,7 +13,6 @@ Layer sources:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from pathlib import Path
@@ -121,8 +120,9 @@ class FabricBackend(SchemaBackend):
             database,
             "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, "
             "ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS "
-            f"WHERE TABLE_SCHEMA = '{schema_filter}' "
+            "WHERE TABLE_SCHEMA = ? "
             "ORDER BY TABLE_NAME, ORDINAL_POSITION",
+            params=(schema_filter,),
         )
         result = LayerSchema(layer=layer)
         for table_name, col, dtype, nullable, ordinal in rows:

@@ -21,7 +21,7 @@ from rich.console import Console
 # Windows consoles often default to cp1252; drift output uses unicode.
 if hasattr(sys.stdout, "reconfigure"):  # pragma: no cover
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 
 from src.backends.base import Layer, SchemaBackend
 from src.config import load_config
@@ -30,11 +30,18 @@ from src.lineage import annotate_downstream
 from src.llm_reasoner import make_reasoner
 from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
-from src.schema_diff import DriftRecord, diff_all
-from src.schema_store import SchemaStore
+from src.schema_diff import DriftRecord, DriftType, diff_all
+from src.schema_store import BaselineError, SchemaStore
+from src.workspace import load_registry
 
 console = Console()
 logger = logging.getLogger("drift-detective")
+
+# process exit codes (documented in README)
+EXIT_CLEAN = 0
+EXIT_CRITICAL_DRIFT = 1
+EXIT_CONFIG_ERROR = 2
+EXIT_BASELINE_ERROR = 3
 
 
 def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
@@ -96,27 +103,52 @@ def run_once(
     backend = make_backend(mode, cfg)
     store = SchemaStore(cfg.get("baseline", {}).get("dir", ".baselines"))
 
+    # Baselines must exist and be complete. A missing baseline is NEVER
+    # silently recreated: recapturing would swallow whatever drifted since
+    # the file vanished. The operator must run --baseline explicitly.
     if not store.has_baselines():
-        console.print("[yellow]No baselines found - capturing initial snapshot; "
-                      "run again after schema changes.[/]")
-        capture_baseline(backend, store)
-        return 0
+        raise BaselineError(
+            f"no baselines found in {store.directory}/ - capture them "
+            "explicitly with:  python main.py --baseline"
+        )
 
     current = backend.get_all_schemas()
+    missing = store.missing_layers(current.keys())
+    if missing:
+        names = ", ".join(layer.value for layer in missing)
+        raise BaselineError(
+            f"baseline file(s) missing for layer(s): {names}. "
+            "Baselines are never recreated implicitly - if this is "
+            "intentional, re-capture with:  python main.py --baseline"
+        )
     baselines = store.load_all()
 
     graph = build_lineage_graph(
         baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
     )
+    workspaces = load_registry(
+        cfg.get("lineage", {}).get("workspaces_manifest", "")
+    )
     drifts: list[DriftRecord] = diff_all(baselines, current)
-    drifts = annotate_downstream(drifts, graph)
+    drifts = annotate_downstream(drifts, graph, workspaces)
 
     if not drifts:
         console.print("[green]No schema drift detected.[/]")
         return 0
 
+    ws_breaks = [
+        d for d in drifts
+        if d.drift_type is DriftType.CROSS_WORKSPACE_BREAK
+    ]
+    if ws_breaks:
+        impacted_ws = sorted({d.workspace for d in ws_breaks if d.workspace})
+        console.print(
+            f"[bold red]Cross-workspace impact:[/] {len(ws_breaks)} break(s) "
+            f"reaching workspace(s): {', '.join(impacted_ws)}"
+        )
+
     # --- Claude reasoning -------------------------------------------------
-    reasoner = make_reasoner(cfg.get("llm", {}))
+    reasoner = make_reasoner(cfg.get("llm", {}), workspaces)
     impact = reasoner.analyze_impact(drifts)
     summary = impact.get("summary", "")
     for analysis in impact.get("analyses", []):
@@ -296,9 +328,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.agent, args.task, mode, cfg,
                 allow_writes=args.allow_writes, max_turns=args.max_turns,
             )
-        except (ValueError, EnvironmentError) as exc:
+        except (OSError, ValueError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
-            return 2
+            return EXIT_CONFIG_ERROR
 
     if args.baseline:
         capture_baseline(make_backend(mode, cfg), SchemaStore(
@@ -310,10 +342,13 @@ def main(argv: list[str] | None = None) -> int:
             criticals = run_once(
                 mode, cfg, dry_run=args.dry_run, open_pr=args.open_pr
             )
-        except (ValueError, EnvironmentError) as exc:
+        except BaselineError as exc:
+            console.print(f"[red]Baseline error:[/] {exc}")
+            return EXIT_BASELINE_ERROR
+        except (OSError, ValueError) as exc:
             console.print(f"[red]Configuration error:[/] {exc}")
-            return 2
-        return 1 if criticals else 0
+            return EXIT_CONFIG_ERROR
+        return EXIT_CRITICAL_DRIFT if criticals else EXIT_CLEAN
 
     parser.print_help()
     return 0

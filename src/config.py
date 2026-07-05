@@ -6,6 +6,7 @@ flows through this module.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -14,13 +15,27 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _resolve_env(match: re.Match[str]) -> str:
+    name = match.group(1)
+    value = os.environ.get(name)
+    if value is None:
+        logger.warning(
+            "config placeholder ${%s} has no environment value; "
+            "substituting empty string", name,
+        )
+        return ""
+    return value
 
 
 def _interpolate(value: Any) -> Any:
     """Recursively replace ${VAR} placeholders with environment values."""
     if isinstance(value, str):
-        return _ENV_PATTERN.sub(lambda m: os.environ.get(m.group(1), ""), value)
+        return _ENV_PATTERN.sub(_resolve_env, value)
     if isinstance(value, dict):
         return {k: _interpolate(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -38,4 +53,7 @@ def load_config(path: str | Path = "config.yaml") -> dict[str, Any]:
     load_dotenv(path.parent / ".env")
     with open(path, encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
-    return _interpolate(raw)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path} must contain a YAML mapping at the top level")
+    result: dict[str, Any] = _interpolate(raw)
+    return result
