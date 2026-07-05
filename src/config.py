@@ -9,15 +9,62 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 from dotenv import load_dotenv
 
+from .backends.base import Layer
+
 logger = logging.getLogger(__name__)
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+_WATCH_MODES = ("full", "boundaries")
+
+
+@dataclass
+class WatchConfig:
+    """Per-layer drift-watch scope (``watch:`` block in config.yaml).
+
+    ``layers`` empty = watch every layer the backend advertises.
+    ``mode``:
+      * ``full`` — report every drift (default, original behavior);
+      * ``boundaries`` — suppress intra-layer records and report only
+        the lineage-synthesized cross_layer_break /
+        cross_workspace_break records. For contract-enforced layers
+        ("my Silver can't drift internally") only boundary breakage
+        matters.
+    """
+
+    layers: list[Layer] = field(default_factory=list)
+    mode: str = "full"
+
+    def includes(self, layer: Layer) -> bool:
+        return not self.layers or layer in self.layers
+
+
+def parse_watch_config(cfg: dict[str, Any]) -> WatchConfig:
+    """Parse+validate the ``watch:`` block; absent block = full watch."""
+    watch = cfg.get("watch", {}) or {}
+    raw_layers = watch.get("layers", []) or []
+    layers: list[Layer] = []
+    for name in raw_layers:
+        try:
+            layers.append(Layer(str(name)))
+        except ValueError as exc:
+            raise ValueError(
+                f"watch.layers contains unknown layer {name!r}; "
+                f"valid: {[layer.value for layer in Layer]}"
+            ) from exc
+    mode = str(watch.get("mode", "full")).strip().lower()
+    if mode not in _WATCH_MODES:
+        raise ValueError(
+            f"watch.mode must be one of {_WATCH_MODES}, got {mode!r}"
+        )
+    return WatchConfig(layers=layers, mode=mode)
 
 
 def _resolve_env(match: re.Match[str]) -> str:

@@ -24,9 +24,10 @@ if hasattr(sys.stdout, "reconfigure"):  # pragma: no cover
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 
 from src.backends.base import Layer, SchemaBackend
-from src.config import load_config
+from src.config import load_config, parse_watch_config
 from src.git_handler import GitHandler
 from src.lineage import annotate_downstream
+from src.lineage_manifest import load_lineage_manifest
 from src.llm_reasoner import make_reasoner
 from src.medallion import build_lineage_graph
 from src.notifications import DriftAlert, build_dispatcher
@@ -45,7 +46,7 @@ EXIT_BASELINE_ERROR = 3
 
 
 def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
-    """Backend factory: identical downstream code path either way."""
+    """Backend factory: identical downstream code path for every mode."""
     if mode == "live":
         import os
 
@@ -60,16 +61,35 @@ def make_backend(mode: str, cfg: dict[str, Any]) -> SchemaBackend:
             cfg.get("fabric", {}),
             reports_dir=cfg.get("git", {}).get("reports_dir", "pbip_reports"),
         )
-    from src.backends.local_backend import LocalBackend
 
-    sim = cfg.get("simulate", {})
-    return LocalBackend(
-        db_path=sim.get("db_path", "sample_data/warehouse.duckdb"),
-        semantic_model_path=sim.get(
-            "semantic_model_path", "sample_data/generated/semantic_model.json"
-        ),
-        reports_path=sim.get("reports_path", "sample_data/generated/reports.json"),
-    )
+    if mode == "simulate":
+        from src.backends.local_backend import LocalBackend
+
+        sim = cfg.get("simulate", {})
+        return LocalBackend(
+            db_path=sim.get("db_path", "sample_data/warehouse.duckdb"),
+            semantic_model_path=sim.get(
+                "semantic_model_path",
+                "sample_data/generated/semantic_model.json",
+            ),
+            reports_path=sim.get(
+                "reports_path", "sample_data/generated/reports.json"
+            ),
+        )
+
+    # direct-connect upstream sources: mode "source" reads source.type,
+    # or the mode itself names a registered source type ("hana", ...)
+    from src.backends import SOURCE_BACKENDS, make_source_backend
+
+    source_cfg = dict(cfg.get("source", {}))
+    if mode != "source":
+        if mode not in SOURCE_BACKENDS:
+            raise ValueError(
+                f"unknown mode {mode!r}; expected live, simulate, source, "
+                f"or one of {sorted(SOURCE_BACKENDS)}"
+            )
+        source_cfg["type"] = mode
+    return make_source_backend(source_cfg)
 
 
 def capture_baseline(backend: SchemaBackend, store: SchemaStore) -> None:
@@ -112,7 +132,12 @@ def run_once(
             "explicitly with:  python main.py --baseline"
         )
 
-    current = backend.get_all_schemas()
+    watch = parse_watch_config(cfg)
+    watched_layers = [
+        layer for layer in backend.list_layers() if watch.includes(layer)
+    ]
+    # unwatched layers are never queried at all
+    current = {layer: backend.get_schema(layer) for layer in watched_layers}
     missing = store.missing_layers(current.keys())
     if missing:
         names = ", ".join(layer.value for layer in missing)
@@ -121,16 +146,31 @@ def run_once(
             "Baselines are never recreated implicitly - if this is "
             "intentional, re-capture with:  python main.py --baseline"
         )
-    baselines = store.load_all()
+    baselines = {
+        layer: schema
+        for layer, schema in store.load_all().items()
+        if watch.includes(layer)
+    }
 
+    lineage_cfg = cfg.get("lineage", {})
     graph = build_lineage_graph(
-        baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
+        baselines.get(Layer.SEMANTIC_MODEL),
+        baselines.get(Layer.REPORTS),
+        manifest=load_lineage_manifest(lineage_cfg.get("manifest", "")),
     )
-    workspaces = load_registry(
-        cfg.get("lineage", {}).get("workspaces_manifest", "")
-    )
+    workspaces = load_registry(lineage_cfg.get("workspaces_manifest", ""))
     drifts: list[DriftRecord] = diff_all(baselines, current)
     drifts = annotate_downstream(drifts, graph, workspaces)
+
+    if watch.mode == "boundaries":
+        # contract-enforced layers: intra-layer drift is suppressed,
+        # only lineage-synthesized boundary breaks surface
+        drifts = [
+            d for d in drifts
+            if d.drift_type in (
+                DriftType.CROSS_LAYER_BREAK, DriftType.CROSS_WORKSPACE_BREAK
+            )
+        ]
 
     if not drifts:
         console.print("[green]No schema drift detected.[/]")
@@ -281,8 +321,11 @@ def print_provisioning() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Fabric Schema Drift Detective")
-    parser.add_argument("--mode", choices=["live", "simulate"], default=None,
-                        help="override config.yaml mode")
+    parser.add_argument("--mode", default=None,
+                        help="override config.yaml mode: live | simulate | "
+                             "source (direct-connect upstream via the "
+                             "source: config block, or the source type "
+                             "directly, e.g. hana / snowflake)")
     parser.add_argument("--once", action="store_true", help="run one cycle")
     parser.add_argument("--baseline", action="store_true",
                         help="capture/refresh baseline snapshots")

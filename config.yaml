@@ -2,7 +2,20 @@
 # Secrets NEVER go here. They live in .env (see .env.example).
 # ${VAR} placeholders are resolved from environment at load time.
 
-mode: simulate            # simulate | live  (CLI --mode overrides)
+mode: simulate            # simulate | live | source  (CLI --mode overrides)
+
+# Direct-connect upstream source (mode: source). Catches drift at the
+# Bronze door, BEFORE it lands in Fabric. If the source is already
+# mirrored/shortcut into a lakehouse, use mode: live instead - the
+# FabricBackend sees it there, no source backend needed.
+source:
+  type: ""                # hana | snowflake (see CONTRIBUTING.md to add more)
+  schema: ""              # source schema to snapshot
+  layer: bronze           # medallion layer the source feeds
+  # Credentials come from .env, never from here:
+  #   HANA:      HANA_HOST, HANA_PORT, HANA_USER, HANA_PASSWORD
+  #   Snowflake: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD,
+  #              SNOWFLAKE_DATABASE (+ optional WAREHOUSE, ROLE)
 
 fabric:
   # auth: client_secret (SPN via .env) | managed_identity (Azure compute)
@@ -12,6 +25,9 @@ fabric:
   workspace_id: ""        # GUID of the Fabric workspace
   lakehouse_id: ""        # Bronze+Silver lakehouse item id
   warehouse_id: ""        # Gold warehouse item id
+  # Where the Gold star schema lives: warehouse (default, dbo schema)
+  # or lakehouse (gold schema / gold_ table prefix on the lakehouse)
+  gold_source: "warehouse"
   semantic_model_id: ""   # semantic model item id
   dataflow_ids: []        # Dataflow Gen2 item ids
   pipeline_ids: []        # Data pipeline item ids
@@ -28,7 +44,22 @@ simulate:
 baseline:
   dir: ".baselines"       # where per-layer schema snapshots are stored
 
+watch:
+  # Layers to watch; empty = all layers the backend advertises.
+  # Unwatched layers are never even queried.
+  layers: []
+  # full        report every drift (default)
+  # boundaries  suppress intra-layer drift; report only cross_layer_break /
+  #             cross_workspace_break - for contract-enforced layers where
+  #             internal change is expected and only boundary breakage matters
+  mode: full
+
 lineage:
+  # Optional Bronze->Silver->Gold column-mapping manifest (YAML or JSON).
+  # Empty = built-in AdventureWorksLT demo mappings. Declare your own
+  # medallion's transformation contract here — see
+  # examples/lineage.example.yaml for the format.
+  manifest: ""
   # Optional cross-workspace topology manifest. When present, drift
   # whose blast radius crosses a workspace boundary is reported as
   # cross_workspace_break (with link type + tenant boundary detail).

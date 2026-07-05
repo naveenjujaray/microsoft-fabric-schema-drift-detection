@@ -8,3 +8,8 @@ python-dotenv>=1.0.1
 tenacity>=9.0.0
 pytest>=8.3.0
 pytest-mock>=3.14.0
+
+# Direct-connect source drivers are OPTIONAL extras - install per source:
+#   pip install .[hana]        (hdbcli)
+#   pip install .[snowflake]   (snowflake-connector-python)
+#   pip install .[live]        (pyodbc, Fabric SQL endpoint)

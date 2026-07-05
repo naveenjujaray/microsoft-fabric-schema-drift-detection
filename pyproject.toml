@@ -33,6 +33,8 @@ dependencies = [
 
 [project.optional-dependencies]
 live = ["pyodbc>=5.1.0"]
+hana = ["hdbcli>=2.20.0"]
+snowflake = ["snowflake-connector-python>=3.12.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-mock>=3.14.0",

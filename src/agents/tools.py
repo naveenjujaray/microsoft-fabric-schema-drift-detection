@@ -29,6 +29,7 @@ from typing import Any
 
 from ..backends.base import Layer, SchemaBackend
 from ..lineage import LineageGraph
+from ..lineage_manifest import load_lineage_manifest
 from ..schema_diff import diff_all
 from ..schema_store import SchemaStore
 from ..workspace import WorkspaceRegistry, load_registry
@@ -110,12 +111,13 @@ class ToolContext:
             )
         store = SchemaStore(cfg.get("baseline", {}).get("dir", ".baselines"))
         baselines = store.load_all()
+        lineage_cfg = cfg.get("lineage", {})
         graph = build_lineage_graph(
-            baselines.get(Layer.SEMANTIC_MODEL), baselines.get(Layer.REPORTS)
+            baselines.get(Layer.SEMANTIC_MODEL),
+            baselines.get(Layer.REPORTS),
+            manifest=load_lineage_manifest(lineage_cfg.get("manifest", "")),
         )
-        workspaces = load_registry(
-            cfg.get("lineage", {}).get("workspaces_manifest", "")
-        )
+        workspaces = load_registry(lineage_cfg.get("workspaces_manifest", ""))
         repo_dir = Path.cwd()
         return cls(
             cfg=cfg,

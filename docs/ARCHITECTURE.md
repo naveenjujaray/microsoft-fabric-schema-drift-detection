@@ -24,17 +24,32 @@ src/
   azure_auth.py             the ONE ClientSecretCredential (Fabric + Graph scopes)
   backends/
     base.py                 Layer enum, ColumnSchema/TableSchema/LayerSchema,
-                            SchemaBackend ABC
+                            SchemaBackend ABC — THE seam: everything else in
+                            the pipeline only ever sees these dataclasses
     local_backend.py        DuckDB information_schema + JSON model/report metadata
     fabric_backend.py       live: REST lakehouse tables, SQL endpoint
-                            INFORMATION_SCHEMA, TMDL parsing, PBIP scanning
+                            INFORMATION_SCHEMA, TMDL parsing, PBIP scanning;
+                            gold_source: warehouse|lakehouse
+    sql_catalog_base.py     direct-connect framework: DBAPI connection factory
+                            + catalog query + type normalizer -> LayerSchema
+    type_normalize.py       cross-source dtype canonicalization (string/int/
+                            bigint/decimal/float/bool/timestamp/date/binary);
+                            prevents NVARCHAR-vs-STRING false drift
+    hana_backend.py         SAP HANA via SYS.TABLE_COLUMNS (optional hdbcli)
+    snowflake_backend.py    Snowflake via INFORMATION_SCHEMA.COLUMNS
+                            (optional snowflake-connector-python)
+    __init__.py             SOURCE_BACKENDS registry + make_source_backend
   fabric_cli.py             `fab` wrapper (single mockable run() choke point)
   fabric_rest.py            Fabric REST: items, lakehouse tables, semantic-model
                             getDefinition (LRO polling), SQL endpoint via pyodbc;
                             retries with exponential backoff + jitter on
                             429/408/5xx and connection failures
-  medallion.py              Bronze->Silver->Gold column mappings (single source
-                            of truth for transforms AND lineage)
+  medallion.py              demo Bronze->Silver->Gold column mappings (fallback
+                            when no lineage manifest is configured)
+  lineage_manifest.py       lineage as DATA: load your own medallion's
+                            (src_table, src_col, dst_table, dst_col) tuples
+                            from YAML/JSON (lineage.manifest in config.yaml);
+                            validation errors name section + index
   schema_diff.py            drift engine: 15 drift types, deterministic rename
                             matching (stable matching + confidence scores),
                             cast-safety classification
@@ -123,6 +138,29 @@ sample_data/
 
 Exit codes: `0` clean · `1` critical drift (CI gate) · `2` config error ·
 `3` missing/corrupt baselines.
+
+## The backend framework
+
+`SchemaBackend` (two methods, returns `LayerSchema` dataclasses) is the
+only seam the drift engine knows. Three families implement it:
+
+* **FabricBackend** (`mode: live`) — the estate as it exists inside
+  Fabric, including mirrored/shortcut sources ("mode B": already in
+  Fabric means no extra backend is ever needed).
+* **LocalBackend** (`mode: simulate`) — DuckDB + JSON, zero-cost demo/CI.
+* **SqlCatalogBackend subclasses** (`mode: source`) — direct-connect
+  upstream sources ("mode A"), catching drift *before* it lands in
+  Fabric. A concrete backend = connection factory + catalog query +
+  type map (~100 lines; HANA and Snowflake ship as references). The
+  `type_normalize` seam canonicalizes each dialect's type names so
+  cross-source strings never read as false drift, while preserving
+  precision/scale parameters for `precision_scale_change`. The shared
+  contract suite (`tests/backends/backend_contract.py`) is the test bar
+  every backend must pass — see CONTRIBUTING.md and docs/BACKENDS.md.
+
+Watch scope (`watch:` config) filters which layers are queried at all,
+and `mode: boundaries` suppresses intra-layer records for
+contract-enforced layers while lineage-synthesized breaks still fire.
 
 ## Key decisions
 
