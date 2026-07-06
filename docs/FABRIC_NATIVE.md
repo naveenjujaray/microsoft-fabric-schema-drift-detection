@@ -98,7 +98,7 @@ environment (`PROD`/`DEV`/`TEST`) at publish time — standard fabric-cicd
 
 | scenario | run it as |
 |---|---|
-| local dev / demo | `python main.py --mode simulate --once --dry-run` |
+| local dev / demo | `fabric-drift --mode simulate --once --dry-run` |
 | CI gate on a schedule, secrets OK | GitHub Actions (`.github/workflows/drift-check.yml`) |
 | zero-secret, inside the tenant | **notebook + pipeline (this doc)** |
 | promote through DEV→TEST→PROD | `fab deploy` + `parameter.yml` |

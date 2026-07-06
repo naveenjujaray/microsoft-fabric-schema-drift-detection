@@ -6,8 +6,8 @@ adding an agent is adding one `AgentSpec` in
 [src/agents/definitions.py](../src/agents/definitions.py).
 
 ```bash
-python main.py --list-agents
-python main.py --agent <name> [--task "..."] [--allow-writes] [--max-turns N] [--mode simulate|live]
+fabric-drift --list-agents
+fabric-drift --agent <name> [--task "..."] [--allow-writes] [--max-turns N] [--mode simulate|live]
 ```
 
 Requires `ANTHROPIC_API_KEY`. Without it every agent returns an explanatory
@@ -32,19 +32,19 @@ Examples:
 
 ```bash
 # what-if analysis (read-only)
-python main.py --agent lineage_qa --task "what breaks if silver.sales_orders.freight is dropped?"
+fabric-drift --agent lineage_qa --task "what breaks if silver.sales_orders.freight is dropped?"
 
 # evidence-based rename verdicts after a suspicious deploy
-python main.py --agent drift_investigator
+fabric-drift --agent drift_investigator
 
 # fix everything fixable, verifying each edit against a fresh diff
-python main.py --agent fix_verify --allow-writes
+fabric-drift --agent fix_verify --allow-writes
 
 # respond to review feedback on PR #42 (on the PR branch)
-python main.py --agent pr_responder --task "address feedback on PR 42" --allow-writes
+fabric-drift --agent pr_responder --task "address feedback on PR 42" --allow-writes
 
 # provision live workspace and capture ids (fab CLI + SPN login required)
-python main.py --mode live --agent provisioner \
+fabric-drift --mode live --agent provisioner \
   --task "inspect workspace SchemaDriftDemo, create missing lakehouse/warehouse, capture ids" \
   --allow-writes
 ```
@@ -127,7 +127,7 @@ cap, token budget, API error — see the printed stop reason), `2` config error.
 
 ## Relationship to the structured pipeline
 
-`python main.py --once` (the scheduled detection path) still uses the
+`fabric-drift --once` (the scheduled detection path) still uses the
 deterministic three-prompt reasoner — predictable cost, JSON-parseable output,
 mock-friendly CI. Agents are the **interactive/operational layer** on top:
 investigation, repair-with-verification, triage, provisioning. They share the
