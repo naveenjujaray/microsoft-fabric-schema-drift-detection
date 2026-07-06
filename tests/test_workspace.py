@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from src.backends.base import Layer
-from src.workspace import (
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.workspace import (
     WorkspaceManifestError,
     WorkspaceRegistry,
     load_registry,

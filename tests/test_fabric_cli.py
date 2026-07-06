@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.fabric_cli import FabricCLI, FabricCLIError
+from fabric_drift_detective.fabric_cli import FabricCLI, FabricCLIError
 
 
 def _proc(stdout: str = "", stderr: str = "", returncode: int = 0) -> MagicMock:
@@ -18,7 +18,7 @@ def _proc(stdout: str = "", stderr: str = "", returncode: int = 0) -> MagicMock:
     return proc
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_run_builds_command(mock_run):
     mock_run.return_value = _proc(stdout="ok")
     cli = FabricCLI()
@@ -27,14 +27,14 @@ def test_run_builds_command(mock_run):
     assert result.stdout == "ok"
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_run_raises_on_failure(mock_run):
     mock_run.return_value = _proc(stderr="boom", returncode=1)
     with pytest.raises(FabricCLIError, match="boom"):
         FabricCLI().run("ls", "nope.Workspace")
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_create_item_path_syntax(mock_run):
     mock_run.return_value = _proc()
     FabricCLI().create_item("DriftDemo", "Bronze", "Lakehouse")
@@ -42,7 +42,7 @@ def test_create_item_path_syntax(mock_run):
     assert args == ["fab", "create", "DriftDemo.Workspace/Bronze.Lakehouse"]
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_create_item_with_params(mock_run):
     mock_run.return_value = _proc()
     FabricCLI().create_item("WS", "GoldWH", "Warehouse", params="enableSchemas=true")
@@ -50,7 +50,7 @@ def test_create_item_with_params(mock_run):
     assert "-P" in args and "enableSchemas=true" in args
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_login_service_principal(mock_run):
     mock_run.return_value = _proc()
     FabricCLI().login_service_principal("cid", "secret", "tid")
@@ -59,7 +59,7 @@ def test_login_service_principal(mock_run):
     assert "-u" in args and "--tenant" in args
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_api_serializes_body(mock_run):
     mock_run.return_value = _proc(stdout='{"id": "abc"}')
     result = FabricCLI().api(
@@ -72,7 +72,7 @@ def test_api_serializes_body(mock_run):
     assert result.json() == {"id": "abc"}
 
 
-@patch("src.fabric_cli.subprocess.run")
+@patch("fabric_drift_detective.fabric_cli.subprocess.run")
 def test_exists_true_false(mock_run):
     mock_run.return_value = _proc(stdout="* true")
     assert FabricCLI().exists("WS.Workspace/Bronze.Lakehouse") is True

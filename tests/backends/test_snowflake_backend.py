@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import Layer
-from src.backends.snowflake_backend import SNOWFLAKE_TYPE_MAP, SnowflakeBackend
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.snowflake_backend import (
+    SNOWFLAKE_TYPE_MAP,
+    SnowflakeBackend,
+)
 from tests.backends.backend_contract import SchemaBackendContract
 from tests.backends.test_sql_catalog_base import FakeConnection
 
@@ -76,7 +79,7 @@ class TestSnowflakeBackendContract(SchemaBackendContract):
 # registry / auto-detect
 # ---------------------------------------------------------------------------
 def test_registry_builds_backends_by_type():
-    from src.backends import SOURCE_BACKENDS, make_source_backend
+    from fabric_drift_detective.backends import SOURCE_BACKENDS, make_source_backend
 
     assert set(SOURCE_BACKENDS) >= {"hana", "snowflake"}
     backend = make_source_backend(
@@ -87,14 +90,14 @@ def test_registry_builds_backends_by_type():
 
 
 def test_registry_unknown_type_lists_available():
-    from src.backends import make_source_backend
+    from fabric_drift_detective.backends import make_source_backend
 
     with pytest.raises(ValueError, match="hana"):
         make_source_backend({"type": "oracle", "schema": "X"})
 
 
 def test_registry_missing_type_rejected():
-    from src.backends import make_source_backend
+    from fabric_drift_detective.backends import make_source_backend
 
     with pytest.raises(ValueError, match="source.type"):
         make_source_backend({"schema": "X"})

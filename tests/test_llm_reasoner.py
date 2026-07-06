@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.backends.base import Layer
-from src.llm_reasoner import (
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.llm_reasoner import (
     ClaudeReasoner,
     MockReasoner,
     make_reasoner,
     parse_llm_json,
 )
-from src.schema_diff import DriftRecord, DriftType, Severity
+from fabric_drift_detective.schema_diff import DriftRecord, DriftType, Severity
 
 
 def _drift(**kw) -> DriftRecord:

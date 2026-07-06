@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from src.backends.type_normalize import (
+from fabric_drift_detective.backends.type_normalize import (
     ANSI_TYPE_MAP,
     CANONICAL_TYPES,
     TypeNormalizer,

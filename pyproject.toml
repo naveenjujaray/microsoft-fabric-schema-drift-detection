@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fabric-schema-drift-detective"
 version = "0.1.0"
@@ -46,16 +50,24 @@ dev = [
     "types-requests",
 ]
 
+[project.scripts]
+fabric-drift = "fabric_drift_detective.cli:main"
+
 [project.urls]
+Homepage = "https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection"
 Repository = "https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection"
+Issues = "https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection/issues"
+
+[tool.setuptools.packages.find]
+include = ["fabric_drift_detective*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 
 [tool.coverage.run]
-source = ["src", "main.py"]
-omit = ["src/agents/definitions.py"]
+source = ["fabric_drift_detective"]
+omit = ["fabric_drift_detective/agents/definitions.py"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -94,7 +106,7 @@ skips = ["B311", "B404", "B603", "B607", "B608"]
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "main.py"]
+files = ["fabric_drift_detective"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_return_any = true

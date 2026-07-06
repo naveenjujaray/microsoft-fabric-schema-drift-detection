@@ -6,13 +6,17 @@ import json
 
 import pytest
 
-from src.backends.base import Layer
-from src.lineage_manifest import (
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.lineage_manifest import (
     ColumnMapping,
     LineageManifest,
     LineageManifestError,
 )
-from src.medallion import BRONZE_TO_SILVER, SILVER_TO_GOLD, build_lineage_graph
+from fabric_drift_detective.medallion import (
+    BRONZE_TO_SILVER,
+    SILVER_TO_GOLD,
+    build_lineage_graph,
+)
 
 VALID_YAML = """\
 bronze_to_silver:

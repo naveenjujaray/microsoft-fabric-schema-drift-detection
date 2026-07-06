@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import Layer
-from src.backends.hana_backend import HANA_TYPE_MAP, HanaBackend
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.hana_backend import HANA_TYPE_MAP, HanaBackend
 from tests.backends.backend_contract import SchemaBackendContract
 from tests.backends.test_sql_catalog_base import FakeConnection
 

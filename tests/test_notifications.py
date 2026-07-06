@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.backends.base import Layer
-from src.notifications.base import DriftAlert
-from src.notifications.console_channel import ConsoleChannel
-from src.notifications.dispatcher import Dispatcher, build_dispatcher
-from src.notifications.outlook_channel import OutlookChannel
-from src.notifications.slack_channel import SlackChannel
-from src.notifications.teams_channel import TeamsChannel
-from src.schema_diff import DriftRecord, DriftType, Severity
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.notifications.base import DriftAlert
+from fabric_drift_detective.notifications.console_channel import ConsoleChannel
+from fabric_drift_detective.notifications.dispatcher import Dispatcher, build_dispatcher
+from fabric_drift_detective.notifications.outlook_channel import OutlookChannel
+from fabric_drift_detective.notifications.slack_channel import SlackChannel
+from fabric_drift_detective.notifications.teams_channel import TeamsChannel
+from fabric_drift_detective.schema_diff import DriftRecord, DriftType, Severity
 
 
 def _alert(pr_url: str | None = "https://github.com/x/y/pull/1") -> DriftAlert:
@@ -68,7 +68,7 @@ def test_slack_bot_mode_includes_channel():
     assert payload["channel"] == "#x"
 
 
-@patch("src.notifications.slack_channel.requests.post")
+@patch("fabric_drift_detective.notifications.slack_channel.requests.post")
 def test_slack_webhook_send(mock_post):
     mock_post.return_value = MagicMock(status_code=200)
     SlackChannel(webhook_url="http://hook").send(_alert())
@@ -110,8 +110,8 @@ def test_outlook_graph_payload():
     assert "/pull/1" in msg["body"]["content"]
 
 
-@patch("src.azure_auth.get_token", return_value="tok")
-@patch("src.notifications.outlook_channel.requests.post")
+@patch("fabric_drift_detective.azure_auth.get_token", return_value="tok")
+@patch("fabric_drift_detective.notifications.outlook_channel.requests.post")
 def test_outlook_graph_send_url(mock_post, _tok):
     mock_post.return_value = MagicMock(status_code=202)
     OutlookChannel(sender="a@b.com", to=["x@b.com"]).send(_alert())

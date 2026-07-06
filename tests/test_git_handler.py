@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-from src.git_handler import GitHandler
+from fabric_drift_detective.git_handler import GitHandler
 
 
 @pytest.fixture

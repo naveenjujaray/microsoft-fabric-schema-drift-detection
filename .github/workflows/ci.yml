@@ -37,7 +37,7 @@ jobs:
         run: mypy
 
       - name: Security scan (bandit)
-        run: bandit -c pyproject.toml -r src main.py -q
+        run: bandit -c pyproject.toml -r fabric_drift_detective main.py -q
 
       - name: Tests + coverage gate
         run: pytest -q --cov --cov-report=term --cov-fail-under=75

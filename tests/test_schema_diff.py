@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import copy
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
-from src.schema_diff import DriftType, Severity, diff_layer
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
+from fabric_drift_detective.schema_diff import DriftType, Severity, diff_layer
 from tests.conftest import make_table
 
 
@@ -232,7 +237,7 @@ def test_diff_rejects_mismatched_layers(silver_baseline):
 # ---------------------------------------------------------------------------
 # deterministic rename detection (stable matching + confidence)
 # ---------------------------------------------------------------------------
-from src.schema_diff import _detect_renames  # noqa: E402
+from fabric_drift_detective.schema_diff import _detect_renames  # noqa: E402
 
 
 def _col(name, dtype="VARCHAR", nullable=True, ordinal=0, is_key=False):
@@ -315,7 +320,7 @@ def test_rename_different_base_types_never_pair():
 
 def test_vanished_layer_reports_all_tables_dropped(silver_baseline):
     """Baseline layer absent from the current snapshot must scream, not skip."""
-    from src.schema_diff import diff_all
+    from fabric_drift_detective.schema_diff import diff_all
 
     drifts = diff_all({Layer.SILVER: silver_baseline}, {})
     assert len(drifts) == len(silver_baseline.tables)

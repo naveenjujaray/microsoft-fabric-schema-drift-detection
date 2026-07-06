@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 import requests
 
-from src.fabric_rest import FabricRest, FabricRestError, _retry_after_seconds
+from fabric_drift_detective.fabric_rest import (
+    FabricRest,
+    FabricRestError,
+    _retry_after_seconds,
+)
 
 
 class FakeResponse:
@@ -39,8 +43,8 @@ class FakeSession:
 
 @pytest.fixture(autouse=True)
 def _no_sleep_no_token(monkeypatch):
-    monkeypatch.setattr("src.fabric_rest.time.sleep", lambda s: None)
-    monkeypatch.setattr("src.fabric_rest.get_token", lambda scope: "fake-token")
+    monkeypatch.setattr("fabric_drift_detective.fabric_rest.time.sleep", lambda s: None)
+    monkeypatch.setattr("fabric_drift_detective.fabric_rest.get_token", lambda scope: "fake-token")
 
 
 def _client(session: FakeSession, retries: int = 3) -> FabricRest:

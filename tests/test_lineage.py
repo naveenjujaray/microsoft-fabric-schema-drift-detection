@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
-from src.lineage import LineageGraph, annotate_downstream, node_id
-from src.schema_diff import DriftRecord, DriftType, Severity
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
+from fabric_drift_detective.lineage import LineageGraph, annotate_downstream, node_id
+from fabric_drift_detective.schema_diff import DriftRecord, DriftType, Severity
 
 
 def _graph() -> LineageGraph:

@@ -36,7 +36,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, SchemaBackend
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    SchemaBackend,
+)
 
 
 class SchemaBackendContract:

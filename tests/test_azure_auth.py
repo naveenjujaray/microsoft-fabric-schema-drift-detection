@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from src import azure_auth
-from src.azure_auth import (
+from fabric_drift_detective import azure_auth
+from fabric_drift_detective.azure_auth import (
     FABRIC_SCOPE,
     NotebookUtilsCredential,
     get_credential,

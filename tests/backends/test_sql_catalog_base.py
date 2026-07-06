@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import Layer
-from src.backends.sql_catalog_base import CatalogQuery, SqlCatalogBackend
-from src.backends.type_normalize import ANSI_TYPE_MAP, TypeNormalizer
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.sql_catalog_base import (
+    CatalogQuery,
+    SqlCatalogBackend,
+)
+from fabric_drift_detective.backends.type_normalize import ANSI_TYPE_MAP, TypeNormalizer
 from tests.backends.backend_contract import SchemaBackendContract
 
 ROWS = [

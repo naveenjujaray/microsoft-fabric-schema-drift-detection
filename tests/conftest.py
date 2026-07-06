@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
 
 
 def make_table(name: str, cols: list[tuple[str, str, bool, bool]]) -> TableSchema:

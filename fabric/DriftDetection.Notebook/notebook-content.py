@@ -68,7 +68,7 @@ print(f"project ready at {WORK_DIR} ({REPO_REF})")
 # -- configure: notebook identity + IDs from parameters -------------------
 os.environ["FABRIC_AUTH_METHOD"] = "notebookutils"  # notebook identity, no secrets
 
-from src.config import load_config
+from fabric_drift_detective.config import load_config
 
 cfg = load_config("config.yaml")
 cfg["fabric"].update(
@@ -91,8 +91,8 @@ print("effective fabric config:",
 # CELL ********************
 
 # -- run one detection cycle ----------------------------------------------
-from main import capture_baseline, make_backend, run_once
-from src.schema_store import BaselineError, SchemaStore
+from fabric_drift_detective.cli import capture_baseline, make_backend, run_once
+from fabric_drift_detective.schema_store import BaselineError, SchemaStore
 
 if CAPTURE_BASELINE:
     capture_baseline(

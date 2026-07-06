@@ -8,10 +8,16 @@ from __future__ import annotations
 
 import pytest
 
-import main as main_mod
-from main import EXIT_BASELINE_ERROR, run_once
-from src.backends.base import ColumnSchema, Layer, LayerSchema, SchemaBackend, TableSchema
-from src.schema_store import BaselineError, SchemaStore
+from fabric_drift_detective import cli as main_mod
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    SchemaBackend,
+    TableSchema,
+)
+from fabric_drift_detective.cli import EXIT_BASELINE_ERROR, run_once
+from fabric_drift_detective.schema_store import BaselineError, SchemaStore
 
 
 class StubBackend(SchemaBackend):

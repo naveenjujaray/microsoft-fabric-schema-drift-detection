@@ -9,13 +9,17 @@ from types import SimpleNamespace
 import duckdb
 import pytest
 
-from src.agents import AGENT_SPECS, list_agents, run_agent
-from src.agents.runtime import AgentRuntime, MockAgentRuntime, make_runtime
-from src.agents.tools import ToolContext, build_registry
-from src.backends.base import Layer
-from src.backends.local_backend import LocalBackend
-from src.medallion import build_lineage_graph
-from src.schema_store import SchemaStore
+from fabric_drift_detective.agents import AGENT_SPECS, list_agents, run_agent
+from fabric_drift_detective.agents.runtime import (
+    AgentRuntime,
+    MockAgentRuntime,
+    make_runtime,
+)
+from fabric_drift_detective.agents.tools import ToolContext, build_registry
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.local_backend import LocalBackend
+from fabric_drift_detective.medallion import build_lineage_graph
+from fabric_drift_detective.schema_store import SchemaStore
 
 
 # ---------------------------------------------------------------- fixtures

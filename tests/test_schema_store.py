@@ -6,8 +6,13 @@ import json
 
 import pytest
 
-from src.backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
-from src.schema_store import BaselineError, SchemaStore
+from fabric_drift_detective.backends.base import (
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
+from fabric_drift_detective.schema_store import BaselineError, SchemaStore
 
 
 def _layer(layer: Layer = Layer.SILVER) -> LayerSchema:

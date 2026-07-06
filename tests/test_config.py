@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.backends.base import Layer
-from src.config import WatchConfig, parse_watch_config
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.config import WatchConfig, parse_watch_config
 
 
 def test_no_watch_block_means_full_watch_all_layers():

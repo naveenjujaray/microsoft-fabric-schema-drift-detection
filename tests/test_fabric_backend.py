@@ -6,8 +6,8 @@ import logging
 
 import pytest
 
-from src.backends.base import Layer
-from src.backends.fabric_backend import FabricBackend
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.fabric_backend import FabricBackend
 
 GOLD_ROWS = [
     ("Dim_Customer", "CustomerKey", "int", "NO", 1),

@@ -12,7 +12,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from src.backends.local_backend import LocalBackend
+from fabric_drift_detective.backends.local_backend import LocalBackend
 from tests.backends.backend_contract import SchemaBackendContract
 
 

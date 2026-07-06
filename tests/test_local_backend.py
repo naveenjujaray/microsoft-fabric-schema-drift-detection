@@ -8,8 +8,8 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from src.backends.base import Layer
-from src.backends.local_backend import LocalBackend
+from fabric_drift_detective.backends.base import Layer
+from fabric_drift_detective.backends.local_backend import LocalBackend
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ def test_reports_bindings(backend):
 
 def test_roundtrip_serialization(backend):
     schema = backend.get_schema(Layer.BRONZE)
-    from src.backends.base import LayerSchema
+    from fabric_drift_detective.backends.base import LayerSchema
 
     restored = LayerSchema.from_dict(schema.to_dict())
     assert restored.to_dict() == schema.to_dict()
