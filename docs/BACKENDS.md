@@ -34,7 +34,7 @@ detection (`--once`).
 
 | | |
 |---|---|
-| Driver | `hdbcli` — `pip install .[hana]` |
+| Driver | `hdbcli` — `pip install "fabric-schema-drift-detective[hana]"` |
 | Catalog | `SYS.TABLE_COLUMNS` (schema-filtered, bind param) |
 | Auth (.env) | `HANA_HOST`, `HANA_PORT`, `HANA_USER`, `HANA_PASSWORD` |
 | Config | `source.type: hana`, `source.schema`, `source.layer` |
@@ -48,7 +48,7 @@ are deliberately unmapped — they pass through with a one-time warning.
 
 | | |
 |---|---|
-| Driver | `snowflake-connector-python` — `pip install .[snowflake]` |
+| Driver | `snowflake-connector-python` — `pip install "fabric-schema-drift-detective[snowflake]"` |
 | Catalog | `INFORMATION_SCHEMA.COLUMNS` (schema-filtered, bind param) |
 | Auth (.env) | `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, `SNOWFLAKE_DATABASE` (+ optional `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_ROLE`) |
 | Config | `source.type: snowflake`, `source.schema`, `source.layer` |

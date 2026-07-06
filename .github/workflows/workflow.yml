@@ -1,0 +1,64 @@
+name: publish-to-pypi
+
+# PyPI Trusted Publishing (OIDC) - no API tokens stored anywhere.
+# Registered on PyPI as:
+#   project:     fabric-schema-drift-detective
+#   owner:       naveenjujaray
+#   repository:  microsoft-fabric-schema-drift-detection
+#   workflow:    workflow.yml   (this file's name must match exactly)
+#   environment: pypi           (create under Settings -> Environments)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project + build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt build twine
+
+      - name: Run tests (never publish a broken wheel)
+        run: pytest -q
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Twine check
+        run: twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fabric-schema-drift-detective
+    permissions:
+      id-token: write   # REQUIRED for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

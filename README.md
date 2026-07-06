@@ -5,6 +5,7 @@
 **Lineage-aware schema-drift detection for Microsoft Fabric medallion architectures —
 with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack alerts.**
 
+[![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective.svg)](https://pypi.org/project/fabric-schema-drift-detective/)
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen.svg)](#-tests)
@@ -29,9 +30,28 @@ opens a **Git PR** with the mechanical repairs, and alerts your team on
 Runs against a real Fabric tenant (**live mode**) or a local DuckDB replica of
 AdventureWorksLT (**simulate mode**) with zero capacity cost — same code path.
 
-## ⚡ Quickstart — 60 seconds, no Fabric account
+## 📦 Install
 
 ```bash
+pip install fabric-schema-drift-detective
+fabric-drift --help          # console script (also: python -m fabric_drift_detective)
+```
+
+Optional extras per integration:
+
+```bash
+pip install "fabric-schema-drift-detective[live]"       # Fabric SQL endpoint (pyodbc)
+pip install "fabric-schema-drift-detective[hana]"       # SAP HANA direct-connect
+pip install "fabric-schema-drift-detective[snowflake]"  # Snowflake direct-connect
+```
+
+## ⚡ Quickstart — 60 seconds, no Fabric account
+
+The demo needs the repo (sample data isn't shipped in the wheel):
+
+```bash
+git clone https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection.git
+cd microsoft-fabric-schema-drift-detection
 pip install -r requirements.txt
 bash scripts/run_demo.sh
 ```
@@ -42,10 +62,6 @@ Run the tests and quality gates any time:
 pip install -e .[dev]     # pytest, ruff, mypy, bandit + type stubs
 pytest -q                 # 248 tests
 ```
-
-Optional extras per integration: `pip install .[live]` (Fabric SQL
-endpoint via pyodbc) · `.[hana]` · `.[snowflake]` (direct-connect
-source drivers).
 
 Loads AdventureWorksLT → builds the medallion → snapshots baselines → injects six
 kinds of drift → prints the drift report, the PR it would open, and every notification
