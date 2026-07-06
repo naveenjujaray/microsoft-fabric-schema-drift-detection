@@ -5,7 +5,7 @@
 **Lineage-aware schema-drift detection for Microsoft Fabric medallion architectures —
 with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack alerts.**
 
-[![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective.svg)](https://pypi.org/project/fabric-schema-drift-detective/)
+[![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective?color=blue&label=pypi&cacheSeconds=600)](https://pypi.org/project/fabric-schema-drift-detective/)
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen.svg)](#-tests)
