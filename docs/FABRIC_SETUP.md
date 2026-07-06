@@ -161,8 +161,8 @@ Then **Grant admin consent**. Notes:
 `AZURE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, webhooks.
 
 ```bash
-python main.py --mode live --baseline    # first snapshot
-python main.py --mode live --once        # detect (after any pipeline run)
+fabric-drift --mode live --baseline    # first snapshot
+fabric-drift --mode live --once        # detect (after any pipeline run)
 ```
 
 ## 10. Run it inside Fabric instead (no secrets)

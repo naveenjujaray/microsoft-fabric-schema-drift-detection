@@ -7,7 +7,7 @@ metadata. Zero Fabric capacity, zero API keys required.
 ## One command
 
 ```bash
-pip install -r requirements.txt
+pip install -e .        # installs deps + the `fabric-drift` CLI
 bash scripts/run_demo.sh
 ```
 
@@ -27,7 +27,7 @@ python -m sample_data.load_adventureworks
 python -m sample_data.build_medallion
 
 # 3. Capture baseline schema snapshots (.baselines/*.json - one per layer)
-python main.py --mode simulate --baseline
+fabric-drift --mode simulate --baseline
 
 # 4. Break things on purpose:
 #    rename       silver.customers.email -> email_address
@@ -39,7 +39,7 @@ python -m sample_data.inject_drift --scenario all
 
 # 5. Detect + reason + report (dry-run: renders PR body and every
 #    notification payload to the console, sends nothing)
-python main.py --mode simulate --once --dry-run
+fabric-drift --mode simulate --once --dry-run
 ```
 
 ## What you should see
@@ -70,8 +70,8 @@ python main.py --mode simulate --once --dry-run
 
 ```bash
 python -m sample_data.inject_drift --scenario rename   # a single scenario
-python main.py --mode simulate --once                  # send real notifications
-ANTHROPIC_API_KEY=sk-... python main.py --mode simulate --once --dry-run
+fabric-drift --mode simulate --once                  # send real notifications
+ANTHROPIC_API_KEY=sk-... fabric-drift --mode simulate --once --dry-run
                                                        # real Claude reasoning
 pytest                                                 # the full test suite
 ```

@@ -25,7 +25,7 @@ source:
 ```
 
 Baselines/diff/lineage/alerting all behave exactly as in the other
-modes — capture a baseline (`python main.py --baseline`), then run
+modes — capture a baseline (`fabric-drift --baseline`), then run
 detection (`--once`).
 
 ## Shipped backends

@@ -16,12 +16,12 @@ echo "==> 3/5 building Silver + Gold + semantic model + reports metadata"
 python -m sample_data.build_medallion
 
 echo "==> 4/5 capturing baseline schema snapshots"
-python main.py --mode simulate --baseline
+python -m fabric_drift_detective --mode simulate --baseline
 
 echo "==> 5/5 injecting drift and running detection"
 python -m sample_data.inject_drift --scenario all
 # exit code 1 = critical drift found (by design, usable as a CI gate);
 # for the demo that's the expected success case.
-python main.py --mode simulate --once --dry-run || true
+python -m fabric_drift_detective --mode simulate --once --dry-run || true
 
-echo "Demo complete. Re-run 'python main.py --mode simulate --once --dry-run' anytime."
+echo "Demo complete. Re-run 'python -m fabric_drift_detective --mode simulate --once --dry-run' anytime."

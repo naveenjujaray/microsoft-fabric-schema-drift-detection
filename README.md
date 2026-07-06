@@ -52,7 +52,7 @@ The demo needs the repo (sample data isn't shipped in the wheel):
 ```bash
 git clone https://github.com/naveenjujaray/microsoft-fabric-schema-drift-detection.git
 cd microsoft-fabric-schema-drift-detection
-pip install -r requirements.txt
+pip install -e .        # deps + the `fabric-drift` CLI
 bash scripts/run_demo.sh
 ```
 
@@ -228,8 +228,8 @@ until it's resolved.
 Want to interrogate it yourself? Ask an agent:
 
 ```bash
-python main.py --agent lineage_qa --task "what breaks if silver.customers.email is renamed?"
-python main.py --agent triage        # rank everything currently drifting, P1→P3
+fabric-drift --agent lineage_qa --task "what breaks if silver.customers.email is renamed?"
+fabric-drift --agent triage        # rank everything currently drifting, P1→P3
 ```
 
 Run the whole story locally in 60 seconds with `bash scripts/run_demo.sh` — it
@@ -294,12 +294,16 @@ without touching consumers.
 
 ## 🚀 Usage
 
+Installed via `pip`, the CLI is `fabric-drift` (equivalently
+`python -m fabric_drift_detective`):
+
 ```bash
-python main.py --mode simulate --baseline        # capture baseline snapshots
-python main.py --mode simulate --once            # one detection cycle
-python main.py --mode simulate --once --dry-run  # render all payloads, send nothing
-python main.py --mode live --once --open-pr      # real Fabric + real PR
-python main.py --provision                       # show fab provisioning steps
+fabric-drift --mode simulate --baseline        # capture baseline snapshots
+fabric-drift --mode simulate --once            # one detection cycle
+fabric-drift --mode simulate --once --dry-run  # render all payloads, send nothing
+fabric-drift --mode live --once --open-pr      # real Fabric + real PR
+fabric-drift --mode snowflake --once           # direct-connect upstream source
+fabric-drift --provision                       # show fab provisioning steps
 ```
 
 Exit codes: `0` clean · `1` critical drift (usable as a CI gate) · `2` config
@@ -320,9 +324,9 @@ the same backends, differ and lineage graph — for interactive investigation,
 verified repair and operations:
 
 ```bash
-python main.py --list-agents
-python main.py --agent lineage_qa --task "what breaks if silver.sales_orders.freight is dropped?"
-python main.py --agent fix_verify --allow-writes    # propose → apply → re-diff → retry
+fabric-drift --list-agents
+fabric-drift --agent lineage_qa --task "what breaks if silver.sales_orders.freight is dropped?"
+fabric-drift --agent fix_verify --allow-writes    # propose → apply → re-diff → retry
 ```
 
 | Agent | Superpower |
