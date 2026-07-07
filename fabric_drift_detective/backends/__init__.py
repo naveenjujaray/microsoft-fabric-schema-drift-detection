@@ -27,6 +27,44 @@ def _snowflake(
     return SnowflakeBackend(cfg, connection_factory=factory)
 
 
+def _databricks(
+    cfg: dict[str, Any], factory: Callable[[], Any] | None
+) -> SchemaBackend:
+    from .databricks_backend import DatabricksBackend
+
+    return DatabricksBackend(cfg, connection_factory=factory)
+
+
+def _sqlserver(
+    cfg: dict[str, Any], factory: Callable[[], Any] | None
+) -> SchemaBackend:
+    from .sqlserver_backend import SqlServerBackend
+
+    return SqlServerBackend(cfg, connection_factory=factory)
+
+
+def _postgres(
+    cfg: dict[str, Any], factory: Callable[[], Any] | None
+) -> SchemaBackend:
+    from .postgres_backend import PostgresBackend
+
+    return PostgresBackend(cfg, connection_factory=factory)
+
+
+def _redshift(
+    cfg: dict[str, Any], factory: Callable[[], Any] | None
+) -> SchemaBackend:
+    from .redshift_backend import RedshiftBackend
+
+    return RedshiftBackend(cfg, connection_factory=factory)
+
+
+def _mysql(cfg: dict[str, Any], factory: Callable[[], Any] | None) -> SchemaBackend:
+    from .mysql_backend import MySqlBackend
+
+    return MySqlBackend(cfg, connection_factory=factory)
+
+
 #: config source.type -> backend builder (lazy imports keep optional
 #: drivers optional). Contributors: add your backend here.
 SOURCE_BACKENDS: dict[
@@ -34,6 +72,11 @@ SOURCE_BACKENDS: dict[
 ] = {
     "hana": _hana,
     "snowflake": _snowflake,
+    "databricks": _databricks,
+    "sqlserver": _sqlserver,
+    "postgres": _postgres,
+    "redshift": _redshift,
+    "mysql": _mysql,
 }
 
 

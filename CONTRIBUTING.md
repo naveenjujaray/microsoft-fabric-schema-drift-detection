@@ -128,12 +128,11 @@ Each is the same recipe — driver + catalog query + type map:
 
 | Source | Driver | Catalog | Difficulty |
 |---|---|---|---|
-| Databricks / Unity Catalog | `databricks-sql-connector` | `INFORMATION_SCHEMA.COLUMNS` / `SHOW COLUMNS` | good first backend |
-| Azure SQL / SQL Server | `pyodbc` | `INFORMATION_SCHEMA.COLUMNS` | good first backend |
-| PostgreSQL (RDS/Aurora) | `psycopg` | `information_schema.columns` | good first backend |
-| AWS Redshift | `redshift_connector` | `SVV_COLUMNS` | good first backend |
-| MySQL / Aurora MySQL | `mysql-connector-python` | `information_schema.columns` | good first backend |
 | Azure Cosmos DB | `azure-cosmos` | container document sampling (schemaless!) | **advanced** — needs a sampling strategy, not a catalog query |
+
+Shipped so far (use these as references): HANA, Snowflake, Databricks /
+Unity Catalog, Azure SQL / SQL Server, PostgreSQL, AWS Redshift,
+MySQL / Aurora MySQL — see [docs/BACKENDS.md](docs/BACKENDS.md).
 
 ## Other contributions
 

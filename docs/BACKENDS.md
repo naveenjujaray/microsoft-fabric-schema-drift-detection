@@ -60,6 +60,79 @@ All three timestamp flavors (`_NTZ`/`_LTZ`/`_TZ`) → `timestamp`.
 Semi-structured (`VARIANT`/`OBJECT`/`ARRAY`) is unmapped by design —
 schemaless columns pass through with a warning.
 
+### Databricks / Unity Catalog
+
+| | |
+|---|---|
+| Driver | `databricks-sql-connector` — `pip install "fabric-schema-drift-detective[databricks]"` |
+| Catalog | `system.information_schema.columns` (catalog + schema filtered, bind params) |
+| Auth (.env) | `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, `DATABRICKS_TOKEN` |
+| Config | `source.type: databricks`, `source.catalog`, `source.schema`, `source.layer` |
+
+Type notes: this is the only backend needing **two** config identifiers —
+Unity Catalog is three-level (`catalog.schema.table`). `STRING` →
+`string`, `TIMESTAMP_NTZ` → `timestamp`, `LONG` → `bigint`. Complex
+types (`ARRAY`/`MAP`/`STRUCT`/`VARIANT`/`INTERVAL`) are unmapped by
+design — they pass through with a warning.
+
+### Azure SQL / SQL Server
+
+| | |
+|---|---|
+| Driver | `pyodbc` — `pip install "fabric-schema-drift-detective[sqlserver]"` + a Microsoft ODBC driver on the host |
+| Catalog | `INFORMATION_SCHEMA.COLUMNS` (schema-filtered, bind param) |
+| Auth (.env) | `SQLSERVER_HOST`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD` (+ optional `SQLSERVER_PORT` (1433), `SQLSERVER_DRIVER` (default "ODBC Driver 18 for SQL Server")) |
+| Config | `source.type: sqlserver`, `source.schema`, `source.layer` |
+
+Type notes: **`TIMESTAMP` maps to `binary`** — in SQL Server it is a
+rowversion, not a temporal type. `UNIQUEIDENTIFIER`/`XML`/`NTEXT` →
+`string`, `DATETIMEOFFSET` → `timestamp`, `IMAGE`/`ROWVERSION` →
+`binary`. CLR/spatial types (`HIERARCHYID`, `GEOGRAPHY`, `GEOMETRY`,
+`SQL_VARIANT`) are unmapped — passthrough with a warning.
+
+### PostgreSQL (RDS / Aurora)
+
+| | |
+|---|---|
+| Driver | `psycopg` v3 — `pip install "fabric-schema-drift-detective[postgres]"` |
+| Catalog | `information_schema.columns` (schema-filtered, bind param) |
+| Auth (.env) | `POSTGRES_HOST`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (+ optional `POSTGRES_PORT` (5432)) |
+| Config | `source.type: postgres`, `source.schema`, `source.layer` |
+
+Type notes: Postgres reports long-form lowercase names — `character
+varying`, `timestamp without time zone`, `double precision` — all
+covered by the ANSI baseline (lookup is case-insensitive). `UUID` →
+`string`; both `TIME` flavors → `timestamp`. `JSON`/`JSONB`/`ARRAY`/
+`USER-DEFINED` (enums) are unmapped — passthrough with a warning.
+
+### AWS Redshift
+
+| | |
+|---|---|
+| Driver | `redshift_connector` — `pip install "fabric-schema-drift-detective[redshift]"` |
+| Catalog | `SVV_COLUMNS` (covers regular **and** external/Spectrum tables; schema-filtered, bind param) |
+| Auth (.env) | `REDSHIFT_HOST`, `REDSHIFT_DATABASE`, `REDSHIFT_USER`, `REDSHIFT_PASSWORD` (+ optional `REDSHIFT_PORT` (5439)) |
+| Config | `source.type: redshift`, `source.schema`, `source.layer` |
+
+Type notes: Postgres-style long-form names plus Redshift shorthands —
+`TIMESTAMPTZ`/`TIMETZ`/`TIME` → `timestamp`, `VARBYTE` → `binary`,
+`BPCHAR` → `string`. `SUPER`/`GEOMETRY`/`GEOGRAPHY`/`HLLSKETCH` are
+unmapped — passthrough with a warning.
+
+### MySQL / Aurora MySQL
+
+| | |
+|---|---|
+| Driver | `mysql-connector-python` — `pip install "fabric-schema-drift-detective[mysql]"` |
+| Catalog | `INFORMATION_SCHEMA.COLUMNS` (schema-filtered, bind param) |
+| Auth (.env) | `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD` (+ optional `MYSQL_PORT` (3306)) |
+| Config | `source.type: mysql`, `source.schema` (the **database** — in MySQL schema = database), `source.layer` |
+
+Type notes: the text/blob size ladder collapses (`TINYTEXT`/
+`MEDIUMTEXT`/`LONGTEXT` → `string`, `TINYBLOB`/`MEDIUMBLOB`/`LONGBLOB`
+→ `binary`); `ENUM`/`SET` → `string`, `MEDIUMINT`/`YEAR` → `int`.
+`JSON` and spatial types are unmapped — passthrough with a warning.
+
 ## Fabric-native (mode: live)
 
 | Layer | Item | Config |

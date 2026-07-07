@@ -8,7 +8,7 @@ with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack a
 [![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective?color=blue&label=pypi&cacheSeconds=600)](https://pypi.org/project/fabric-schema-drift-detective/)
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-303%20passing-brightgreen.svg)](#-tests)
 [![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
@@ -43,6 +43,11 @@ Optional extras per integration:
 pip install "fabric-schema-drift-detective[live]"       # Fabric SQL endpoint (pyodbc)
 pip install "fabric-schema-drift-detective[hana]"       # SAP HANA direct-connect
 pip install "fabric-schema-drift-detective[snowflake]"  # Snowflake direct-connect
+pip install "fabric-schema-drift-detective[databricks]" # Databricks / Unity Catalog
+pip install "fabric-schema-drift-detective[sqlserver]"  # Azure SQL / SQL Server
+pip install "fabric-schema-drift-detective[postgres]"   # PostgreSQL (RDS/Aurora)
+pip install "fabric-schema-drift-detective[redshift]"   # AWS Redshift
+pip install "fabric-schema-drift-detective[mysql]"      # MySQL / Aurora MySQL
 ```
 
 ## ⚡ Quickstart — 60 seconds, no Fabric account
@@ -60,7 +65,7 @@ Run the tests and quality gates any time:
 
 ```bash
 pip install -e .[dev]     # pytest, ruff, mypy, bandit + type stubs
-pytest -q                 # 248 tests
+pytest -q                 # 303 tests
 ```
 
 Loads AdventureWorksLT → builds the medallion → snapshots baselines → injects six
@@ -156,11 +161,11 @@ Two integration modes — pick per source:
 | Local DuckDB simulation | simulate | ✅ shipped | — |
 | **SAP HANA** | source | ✅ shipped | `.[hana]` |
 | **Snowflake** | source | ✅ shipped | `.[snowflake]` |
-| Databricks / Unity Catalog | source | 🙋 contributor wanted | — |
-| Azure SQL / SQL Server | source | 🙋 contributor wanted | — |
-| PostgreSQL (RDS/Aurora) | source | 🙋 contributor wanted | — |
-| AWS Redshift | source | 🙋 contributor wanted | — |
-| MySQL / Aurora MySQL | source | 🙋 contributor wanted | — |
+| **Databricks / Unity Catalog** | source | ✅ shipped | `.[databricks]` |
+| **Azure SQL / SQL Server** | source | ✅ shipped | `.[sqlserver]` |
+| **PostgreSQL (RDS/Aurora)** | source | ✅ shipped | `.[postgres]` |
+| **AWS Redshift** | source | ✅ shipped | `.[redshift]` |
+| **MySQL / Aurora MySQL** | source | ✅ shipped | `.[mysql]` |
 | Azure Cosmos DB | source | 🙋 wanted (advanced — schemaless) | — |
 
 A new backend is ~100 lines: connection factory + catalog query + type
@@ -406,12 +411,13 @@ credential as Fabric — one app registration, one auth stack (permissions:
 ## ✅ Tests & quality gates
 
 ```bash
-pytest                    # 248 tests: differ (15 drift types), deterministic
+pytest                    # 303 tests: differ (15 drift types), deterministic
                           # rename matching, cross-workspace lineage, baseline
                           # fail-loud policy, REST retry/backoff, git handler
                           # security guards, agents, notifications, lineage
                           # manifest, watch scope, type normalization, and the
-                          # backend contract suite (Local/HANA/Snowflake)
+                          # backend contract suite (Local/HANA/Snowflake/
+                          # Databricks/SQL Server/Postgres/Redshift/MySQL)
 ruff check .              # lint (incl. bugbear + security rules)
 mypy                      # strict-leaning type check, 0 errors
 bandit -c pyproject.toml -r src main.py   # security scan
