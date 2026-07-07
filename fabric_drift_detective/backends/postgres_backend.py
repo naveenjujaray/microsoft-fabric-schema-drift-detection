@@ -65,7 +65,7 @@ def _env_connection_factory() -> Any:
 
     return psycopg.connect(
         host=os.environ["POSTGRES_HOST"],
-        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        port=int(os.environ.get("POSTGRES_PORT") or "5432"),  # blank -> default
         dbname=os.environ["POSTGRES_DATABASE"],
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],

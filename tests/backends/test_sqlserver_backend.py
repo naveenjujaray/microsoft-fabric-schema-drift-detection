@@ -55,6 +55,14 @@ def test_sqlserver_specific_types_covered():
         assert special not in SQLSERVER_TYPE_MAP
 
 
+def test_odbc_value_escapes_metacharacters():
+    from fabric_drift_detective.backends.sqlserver_backend import _odbc_value
+
+    assert _odbc_value("plain") == "{plain}"
+    # ';' must not terminate the attribute; '}' must be doubled
+    assert _odbc_value("p;w0rd}x") == "{p;w0rd}}x}"
+
+
 def test_missing_schema_config_rejected():
     with pytest.raises(ValueError, match="schema"):
         SqlServerBackend({}, connection_factory=lambda: FakeConnection([]))

@@ -8,7 +8,7 @@ with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack a
 [![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective?color=blue&label=pypi&cacheSeconds=600)](https://pypi.org/project/fabric-schema-drift-detective/)
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-303%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-305%20passing-brightgreen.svg)](#-tests)
 [![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
@@ -65,7 +65,7 @@ Run the tests and quality gates any time:
 
 ```bash
 pip install -e .[dev]     # pytest, ruff, mypy, bandit + type stubs
-pytest -q                 # 303 tests
+pytest -q                 # 305 tests
 ```
 
 Loads AdventureWorksLT → builds the medallion → snapshots baselines → injects six
@@ -411,7 +411,7 @@ credential as Fabric — one app registration, one auth stack (permissions:
 ## ✅ Tests & quality gates
 
 ```bash
-pytest                    # 303 tests: differ (15 drift types), deterministic
+pytest                    # 305 tests: differ (15 drift types), deterministic
                           # rename matching, cross-workspace lineage, baseline
                           # fail-loud policy, REST retry/backoff, git handler
                           # security guards, agents, notifications, lineage

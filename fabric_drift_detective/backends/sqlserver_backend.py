@@ -18,7 +18,8 @@ Config (``source:`` block in config.yaml)::
 
 Credentials via .env: ``SQLSERVER_HOST``, ``SQLSERVER_DATABASE``,
 ``SQLSERVER_USER``, ``SQLSERVER_PASSWORD`` (optional:
-``SQLSERVER_PORT`` (1433), ``SQLSERVER_DRIVER``).
+``SQLSERVER_PORT`` (1433), ``SQLSERVER_DRIVER``,
+``SQLSERVER_TRUST_CERT=yes`` for on-prem self-signed certificates).
 """
 
 from __future__ import annotations
@@ -60,6 +61,11 @@ _ENV_VARS = (
 )
 
 
+def _odbc_value(value: str) -> str:
+    """Brace-quote an ODBC attribute value; ';' and '}' are metacharacters."""
+    return "{" + value.replace("}", "}}") + "}"
+
+
 def _env_connection_factory() -> Any:
     missing = [v for v in _ENV_VARS if not os.environ.get(v)]
     if missing:
@@ -69,16 +75,23 @@ def _env_connection_factory() -> Any:
         )
     import pyodbc  # optional extra: pip install .[sqlserver]
 
-    driver = os.environ.get("SQLSERVER_DRIVER", "ODBC Driver 18 for SQL Server")
-    port = os.environ.get("SQLSERVER_PORT", "1433")
-    return pyodbc.connect(
+    # "or" (not get-default): .env.example ships these blank, and a
+    # blank env var must fall back too
+    driver = os.environ.get("SQLSERVER_DRIVER") or "ODBC Driver 18 for SQL Server"
+    port = os.environ.get("SQLSERVER_PORT") or "1433"
+    conn_str = (
         f"DRIVER={{{driver}}};"
         f"SERVER={os.environ['SQLSERVER_HOST']},{port};"
-        f"DATABASE={os.environ['SQLSERVER_DATABASE']};"
-        f"UID={os.environ['SQLSERVER_USER']};"
-        f"PWD={os.environ['SQLSERVER_PASSWORD']};"
+        f"DATABASE={_odbc_value(os.environ['SQLSERVER_DATABASE'])};"
+        f"UID={_odbc_value(os.environ['SQLSERVER_USER'])};"
+        f"PWD={_odbc_value(os.environ['SQLSERVER_PASSWORD'])};"
         "Encrypt=yes"
     )
+    # opt-in for on-prem servers with self-signed certs (Driver 18
+    # enforces certificate validation by default)
+    if (os.environ.get("SQLSERVER_TRUST_CERT") or "").lower() in ("yes", "true", "1"):
+        conn_str += ";TrustServerCertificate=yes"
+    return pyodbc.connect(conn_str)
 
 
 class SqlServerBackend(SqlCatalogBackend):

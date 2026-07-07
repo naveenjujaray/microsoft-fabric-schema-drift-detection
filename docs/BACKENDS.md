@@ -75,13 +75,17 @@ Unity Catalog is three-level (`catalog.schema.table`). `STRING` →
 types (`ARRAY`/`MAP`/`STRUCT`/`VARIANT`/`INTERVAL`) are unmapped by
 design — they pass through with a warning.
 
+Connect to a **SQL warehouse** HTTP path (or a cluster on DBR 14.2+):
+the catalog query uses native bind parameters, which older classic
+clusters don't support server-side.
+
 ### Azure SQL / SQL Server
 
 | | |
 |---|---|
 | Driver | `pyodbc` — `pip install "fabric-schema-drift-detective[sqlserver]"` + a Microsoft ODBC driver on the host |
 | Catalog | `INFORMATION_SCHEMA.COLUMNS` (schema-filtered, bind param) |
-| Auth (.env) | `SQLSERVER_HOST`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD` (+ optional `SQLSERVER_PORT` (1433), `SQLSERVER_DRIVER` (default "ODBC Driver 18 for SQL Server")) |
+| Auth (.env) | `SQLSERVER_HOST`, `SQLSERVER_DATABASE`, `SQLSERVER_USER`, `SQLSERVER_PASSWORD` (+ optional `SQLSERVER_PORT` (1433), `SQLSERVER_DRIVER` (default "ODBC Driver 18 for SQL Server"), `SQLSERVER_TRUST_CERT=yes` for on-prem self-signed certs) |
 | Config | `source.type: sqlserver`, `source.schema`, `source.layer` |
 
 Type notes: **`TIMESTAMP` maps to `binary`** — in SQL Server it is a

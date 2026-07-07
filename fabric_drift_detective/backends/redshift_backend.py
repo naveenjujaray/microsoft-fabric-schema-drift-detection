@@ -66,7 +66,7 @@ def _env_connection_factory() -> Any:
 
     return redshift_connector.connect(
         host=os.environ["REDSHIFT_HOST"],
-        port=int(os.environ.get("REDSHIFT_PORT", "5439")),
+        port=int(os.environ.get("REDSHIFT_PORT") or "5439"),  # blank -> default
         database=os.environ["REDSHIFT_DATABASE"],
         user=os.environ["REDSHIFT_USER"],
         password=os.environ["REDSHIFT_PASSWORD"],

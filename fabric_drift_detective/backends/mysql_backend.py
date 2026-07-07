@@ -68,7 +68,7 @@ def _env_connection_factory() -> Any:
 
     return mysql.connector.connect(
         host=os.environ["MYSQL_HOST"],
-        port=int(os.environ.get("MYSQL_PORT", "3306")),
+        port=int(os.environ.get("MYSQL_PORT") or "3306"),  # blank -> default
         user=os.environ["MYSQL_USER"],
         password=os.environ["MYSQL_PASSWORD"],
     )

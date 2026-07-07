@@ -43,6 +43,9 @@ DATABRICKS_TYPE_MAP: dict[str, str] = {
     # complex columns pass through with a warning
 }
 
+# ponytail: native '?' bind params need a SQL warehouse or DBR 14.2+;
+# for older classic clusters pass a custom connection_factory built with
+# databricks.sql.connect(..., use_inline_params=True)
 _CATALOG_SQL = (
     "SELECT table_name, column_name, data_type, is_nullable, "
     "ordinal_position FROM system.information_schema.columns "
