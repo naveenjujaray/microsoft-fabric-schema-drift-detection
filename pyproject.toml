@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabric-schema-drift-detective"
-version = "0.1.0"
+version = "0.1.1"
 description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis and cross-workspace lineage"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,6 +39,11 @@ dependencies = [
 live = ["pyodbc>=5.1.0"]
 hana = ["hdbcli>=2.20.0"]
 snowflake = ["snowflake-connector-python>=3.12.0"]
+databricks = ["databricks-sql-connector>=3.0.0"]
+sqlserver = ["pyodbc>=5.1.0"]
+postgres = ["psycopg[binary]>=3.1.0"]
+redshift = ["redshift_connector>=2.1.0"]
+mysql = ["mysql-connector-python>=8.4.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-mock>=3.14.0",

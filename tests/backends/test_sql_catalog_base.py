@@ -114,6 +114,19 @@ def test_nullable_parsing_accepts_common_forms():
     ]
 
 
+def test_zero_rows_logs_warning_but_returns_empty_schema(caplog):
+    """Case-mismatched schema names match nothing; a silent empty baseline
+    would make every future drift check pass vacuously — warn loudly."""
+    import logging
+
+    backend, _ = _backend(rows=[])
+    with caplog.at_level(logging.WARNING):
+        schema = backend.get_schema(Layer.BRONZE)
+    assert schema.tables == {}  # contract: empty source never raises
+    assert any("no columns" in r.message for r in caplog.records)
+    assert any("MYSCHEMA" in r.message for r in caplog.records)
+
+
 class TestSqlCatalogBackendContract(SchemaBackendContract):
     """The base itself passes the shared backend contract."""
 

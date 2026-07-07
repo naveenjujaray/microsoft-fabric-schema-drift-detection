@@ -20,12 +20,15 @@ sources sit upstream of Fabric and drift is caught at the door.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from .base import ColumnSchema, Layer, LayerSchema, SchemaBackend, TableSchema
 from .type_normalize import TypeNormalizer
+
+logger = logging.getLogger(__name__)
 
 #: forms of "nullable" seen across catalogs
 _TRUTHY = {"YES", "TRUE", "Y", "1"}
@@ -73,6 +76,17 @@ class SqlCatalogBackend(SchemaBackend):
                 f"not {layer.value!r}"
             )
         rows = self._catalog_rows()
+        if not rows:
+            # a case-mismatched schema/catalog name matches nothing; an
+            # empty baseline would make every later drift check pass
+            # vacuously, so make the emptiness loud (contract still says
+            # empty must not raise - first run against a fresh source)
+            logger.warning(
+                "catalog query returned no columns for params %r - if the "
+                "source is not actually empty, check source.schema/catalog "
+                "spelling and case in config.yaml",
+                self.catalog_query.params,
+            )
         result = LayerSchema(layer=self.layer)
         for table_name, column_name, dtype, nullable, ordinal in rows:
             table = result.tables.setdefault(
