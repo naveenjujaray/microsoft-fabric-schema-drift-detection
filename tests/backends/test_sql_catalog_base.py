@@ -114,6 +114,22 @@ def test_nullable_parsing_accepts_common_forms():
     ]
 
 
+def test_optional_default_and_flags_row_elements():
+    """Backends opt into default/flags capture by widening their catalog
+    query to 6 or 7 columns; 5-column rows keep working unchanged."""
+    rows = [
+        ("T", "a", "INTEGER", "NO", 1),
+        ("T", "b", "INTEGER", "YES", 2, "42"),
+        ("T", "c", "INTEGER", "YES", 3, None, "identity,computed"),
+    ]
+    backend, _ = _backend(rows=rows)
+    cols = backend.get_schema(Layer.BRONZE).tables["T"].columns
+    assert cols["a"].default is None and cols["a"].flags == ()
+    assert cols["b"].default == "42" and cols["b"].flags == ()
+    assert cols["c"].default is None
+    assert cols["c"].flags == ("computed", "identity")  # sorted, deterministic
+
+
 def test_zero_rows_logs_warning_but_returns_empty_schema(caplog):
     """Case-mismatched schema names match nothing; a silent empty baseline
     would make every future drift check pass vacuously — warn loudly."""

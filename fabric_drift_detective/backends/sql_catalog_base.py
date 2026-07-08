@@ -9,6 +9,9 @@ a concrete backend supplies only
   optional dependency),
 * a **catalog query** — SQL + bind params returning rows of
   ``(table_name, column_name, data_type, is_nullable, ordinal)``,
+  optionally widened with a 6th element (column default expression)
+  and a 7th (comma-separated column flags, e.g. ``"identity"``) to
+  feed ``default_change`` / ``flag_change`` detection,
 * a **type normalizer** — the source dialect's map into the canonical
   type vocabulary (see ``type_normalize``).
 
@@ -88,7 +91,15 @@ class SqlCatalogBackend(SchemaBackend):
                 self.catalog_query.params,
             )
         result = LayerSchema(layer=self.layer)
-        for table_name, column_name, dtype, nullable, ordinal in rows:
+        for table_name, column_name, dtype, nullable, ordinal, *extra in rows:
+            default = (
+                str(extra[0]) if len(extra) > 0 and extra[0] is not None else None
+            )
+            flags: tuple[str, ...] = ()
+            if len(extra) > 1 and extra[1]:
+                flags = tuple(
+                    sorted(f.strip() for f in str(extra[1]).split(",") if f.strip())
+                )
             table = result.tables.setdefault(
                 str(table_name), TableSchema(name=str(table_name))
             )
@@ -97,6 +108,8 @@ class SqlCatalogBackend(SchemaBackend):
                 dtype=self.normalizer.normalize(str(dtype)),
                 nullable=_parse_nullable(nullable),
                 ordinal=int(ordinal),
+                default=default,
+                flags=flags,
             )
         return result
 

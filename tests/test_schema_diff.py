@@ -26,6 +26,57 @@ def test_no_drift(silver_baseline):
     assert diff_layer(silver_baseline, _clone(silver_baseline)) == []
 
 
+def _replace_col(schema: LayerSchema, table: str, col: str, **overrides):
+    old = schema.tables[table].columns[col]
+    fields = {
+        "name": old.name, "dtype": old.dtype, "nullable": old.nullable,
+        "ordinal": old.ordinal, "is_key": old.is_key,
+        "default": old.default, "flags": old.flags,
+    }
+    fields.update(overrides)
+    schema.tables[table].columns[col] = ColumnSchema(**fields)
+
+
+def test_default_change_is_warning(silver_baseline):
+    cur = _clone(silver_baseline)
+    _replace_col(cur, "orders", "freight", default="0.0")
+    drifts = diff_layer(silver_baseline, cur)
+    assert _types(drifts) == {DriftType.DEFAULT_CHANGE}
+    d = drifts[0]
+    assert d.severity is Severity.WARNING
+    assert not d.auto_fixable
+    assert d.old is None and d.new == "0.0"
+    assert d.table == "orders" and d.column == "freight"
+
+
+def test_flag_change_is_warning(silver_baseline):
+    cur = _clone(silver_baseline)
+    _replace_col(cur, "orders", "freight", flags=("identity",))
+    drifts = diff_layer(silver_baseline, cur)
+    assert _types(drifts) == {DriftType.FLAG_CHANGE}
+    d = drifts[0]
+    assert d.severity is Severity.WARNING
+    assert not d.auto_fixable
+
+
+def test_flag_order_is_not_drift(silver_baseline):
+    base = _clone(silver_baseline)
+    _replace_col(base, "orders", "freight", flags=("computed", "identity"))
+    cur = _clone(silver_baseline)
+    _replace_col(cur, "orders", "freight", flags=("identity", "computed"))
+    assert diff_layer(base, cur) == []
+
+
+def test_column_schema_default_flags_roundtrip():
+    col = ColumnSchema(name="x", dtype="INT", default="42",
+                       flags=("identity",))
+    assert ColumnSchema.from_dict(col.to_dict()) == col
+    # baselines written before default/flags existed still load
+    legacy = {"name": "x", "dtype": "INT"}
+    old = ColumnSchema.from_dict(legacy)
+    assert old.default is None and old.flags == ()
+
+
 def test_column_drop_is_critical(silver_baseline):
     cur = _clone(silver_baseline)
     del cur.tables["orders"].columns["freight"]

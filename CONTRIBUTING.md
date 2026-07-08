@@ -123,16 +123,19 @@ for the wiring pattern.
 
 ## Wanted backends (claim one!)
 
-Open a [new-backend issue](.github/ISSUE_TEMPLATE/new-backend.md) to claim.
-Each is the same recipe — driver + catalog query + type map:
+Every backend on the original wanted list has shipped: HANA, Snowflake,
+Databricks / Unity Catalog, Azure SQL / SQL Server, PostgreSQL, AWS
+Redshift, MySQL / Aurora MySQL, and Azure Cosmos DB (document-sampling
+inference) — use them as references, see
+[docs/BACKENDS.md](docs/BACKENDS.md).
 
-| Source | Driver | Catalog | Difficulty |
-|---|---|---|---|
-| Azure Cosmos DB | `azure-cosmos` | container document sampling (schemaless!) | **advanced** — needs a sampling strategy, not a catalog query |
-
-Shipped so far (use these as references): HANA, Snowflake, Databricks /
-Unity Catalog, Azure SQL / SQL Server, PostgreSQL, AWS Redshift,
-MySQL / Aurora MySQL — see [docs/BACKENDS.md](docs/BACKENDS.md).
+Want another source (Oracle, BigQuery, MongoDB, Kafka schema
+registry…)? Open a
+[new-backend issue](.github/ISSUE_TEMPLATE/new-backend.md) — if it has
+a queryable catalog it's the same recipe: driver + catalog query + type
+map. Backends can also opt into `default_change`/`flag_change`
+detection by widening their catalog query with a 6th (default
+expression) and 7th (comma-separated flags) column.
 
 ## Other contributions
 

@@ -137,6 +137,42 @@ Type notes: the text/blob size ladder collapses (`TINYTEXT`/
 → `binary`); `ENUM`/`SET` → `string`, `MEDIUMINT`/`YEAR` → `int`.
 `JSON` and spatial types are unmapped — passthrough with a warning.
 
+### Azure Cosmos DB (schemaless — inferred by sampling)
+
+| | |
+|---|---|
+| Driver | `azure-cosmos` — `pip install "fabric-schema-drift-detective[cosmos]"` |
+| Catalog | **none** — schema inferred by sampling documents per container |
+| Auth (.env) | `COSMOS_ENDPOINT`, `COSMOS_KEY` |
+| Config | `source.type: cosmos`, `source.database`, `source.layer` (+ optional `source.containers` list (default: all), `source.sample_size` (default 100)) |
+
+Cosmos has no catalog to query, so this backend samples up to
+`sample_size` documents per container and infers the contract: field
+names become columns, JSON value types map to `bool`/`int`/`float`/
+`string`/`object`/`array`, a field null or missing in any sampled
+document is nullable, and a field with conflicting types across
+documents becomes `mixed`. Ordering is alphabetical and inference is
+deterministic — the same data always snapshots identically. Cosmos
+system properties (`_rid`, `_ts`, …) are stripped.
+
+**Sampling ceiling:** a field rarer than 1/`sample_size` can flap
+between `column_add`/`column_drop` across runs — raise
+`source.sample_size` for heterogeneous containers.
+
+## Default & flag capture (default_change / flag_change)
+
+The differ fires `default_change` when a column's default expression
+changes and `flag_change` when source-declared attributes (`identity`,
+`computed`, `auto_increment`, …) change. Both are **opt-in per
+backend**: a backend that doesn't capture them leaves
+`ColumnSchema.default`/`flags` empty and the checks stay silent.
+
+* The **simulate backend** captures defaults from DuckDB.
+* **SQL-catalog backends** opt in by widening their catalog query to a
+  6th column (default expression) and optionally a 7th
+  (comma-separated flags) — `SqlCatalogBackend` picks them up
+  automatically, no code change needed.
+
 ## Fabric-native (mode: live)
 
 | Layer | Item | Config |

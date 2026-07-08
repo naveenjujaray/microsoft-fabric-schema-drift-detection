@@ -65,6 +65,13 @@ def _mysql(cfg: dict[str, Any], factory: Callable[[], Any] | None) -> SchemaBack
     return MySqlBackend(cfg, connection_factory=factory)
 
 
+def _cosmos(cfg: dict[str, Any], factory: Callable[[], Any] | None) -> SchemaBackend:
+    from .cosmos_backend import CosmosBackend
+
+    # Cosmos has no DBAPI connection; the factory yields a CosmosClient
+    return CosmosBackend(cfg, client_factory=factory)
+
+
 #: config source.type -> backend builder (lazy imports keep optional
 #: drivers optional). Contributors: add your backend here.
 SOURCE_BACKENDS: dict[
@@ -77,6 +84,7 @@ SOURCE_BACKENDS: dict[
     "postgres": _postgres,
     "redshift": _redshift,
     "mysql": _mysql,
+    "cosmos": _cosmos,
 }
 
 

@@ -27,13 +27,22 @@ class Layer(str, Enum):
 
 @dataclass(frozen=True)
 class ColumnSchema:
-    """A single column's contract."""
+    """A single column's contract.
+
+    ``default`` is the column's default expression as the catalog reports
+    it (None = no default / not captured). ``flags`` are source-declared
+    column attributes ("identity", "computed", "auto_increment", ...);
+    both are optional — backends that don't capture them leave the
+    defaults, and the differ then never fires for them.
+    """
 
     name: str
     dtype: str
     nullable: bool = True
     ordinal: int = 0
     is_key: bool = False
+    default: str | None = None
+    flags: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +51,8 @@ class ColumnSchema:
             "nullable": self.nullable,
             "ordinal": self.ordinal,
             "is_key": self.is_key,
+            "default": self.default,
+            "flags": list(self.flags),
         }
 
     @classmethod
@@ -52,6 +63,8 @@ class ColumnSchema:
             nullable=d.get("nullable", True),
             ordinal=d.get("ordinal", 0),
             is_key=d.get("is_key", False),
+            default=d.get("default"),
+            flags=tuple(d.get("flags", ())),
         )
 
 
