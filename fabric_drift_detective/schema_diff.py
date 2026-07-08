@@ -6,9 +6,9 @@ afterwards by ``lineage.annotate_downstream`` using the lineage graph.
 
 Drift types:
     column_drop, column_add, type_change, precision_scale_change,
-    column_rename, column_reorder, nullability_change, table_drop,
-    table_add, key_change, measure_drop, measure_add, measure_change,
-    cross_layer_break, cross_workspace_break
+    column_rename, column_reorder, nullability_change, default_change,
+    flag_change, table_drop, table_add, key_change, measure_drop,
+    measure_add, measure_change, cross_layer_break, cross_workspace_break
 """
 
 from __future__ import annotations
@@ -19,7 +19,13 @@ from difflib import SequenceMatcher
 from enum import Enum
 from typing import Any
 
-from .backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
+from .backends.base import (
+    DEFAULT_NOT_CAPTURED,
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
 
 
 class DriftType(str, Enum):
@@ -30,6 +36,8 @@ class DriftType(str, Enum):
     COLUMN_RENAME = "column_rename"
     COLUMN_REORDER = "column_reorder"
     NULLABILITY_CHANGE = "nullability_change"
+    DEFAULT_CHANGE = "default_change"
+    FLAG_CHANGE = "flag_change"
     TABLE_DROP = "table_drop"
     TABLE_ADD = "table_add"
     KEY_CHANGE = "key_change"
@@ -390,6 +398,40 @@ def _diff_table(
                     column=name,
                     old=b.is_key,
                     new=c.is_key,
+                    auto_fixable=False,
+                )
+            )
+        if (
+            DEFAULT_NOT_CAPTURED not in (b.default, c.default)
+            and b.default != c.default
+        ):
+            # a changed default silently changes what lands in new rows -
+            # data semantics move without any query breaking. Sides from
+            # pre-capture baselines are skipped, not treated as "no default".
+            drifts.append(
+                DriftRecord(
+                    layer=layer,
+                    drift_type=DriftType.DEFAULT_CHANGE,
+                    severity=Severity.WARNING,
+                    table=base.name,
+                    column=name,
+                    old=b.default,
+                    new=c.default,
+                    auto_fixable=False,
+                )
+            )
+        if set(b.flags) != set(c.flags):
+            # identity/computed/auto-increment gained or lost - breaks
+            # inserts and assumptions about who generates the value
+            drifts.append(
+                DriftRecord(
+                    layer=layer,
+                    drift_type=DriftType.FLAG_CHANGE,
+                    severity=Severity.WARNING,
+                    table=base.name,
+                    column=name,
+                    old=sorted(b.flags),
+                    new=sorted(c.flags),
                     auto_fixable=False,
                 )
             )

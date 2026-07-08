@@ -8,7 +8,7 @@ with Claude-powered impact analysis, auto-fix PRs, and Teams / Outlook / Slack a
 [![PyPI](https://img.shields.io/pypi/v/fabric-schema-drift-detective?color=blue&label=pypi&cacheSeconds=600)](https://pypi.org/project/fabric-schema-drift-detective/)
 [![CI](https://img.shields.io/badge/CI-lint%20%C2%B7%20types%20%C2%B7%20security%20%C2%B7%20coverage-brightgreen.svg)](.github/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-305%20passing-brightgreen.svg)](#-tests)
+[![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen.svg)](#-tests)
 [![Agents](https://img.shields.io/badge/agents-10-8a2be2.svg)](#-agents--ten-tool-use-specialists)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](#-license)
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft-Fabric-117865.svg)](https://learn.microsoft.com/fabric/)
@@ -48,6 +48,7 @@ pip install "fabric-schema-drift-detective[sqlserver]"  # Azure SQL / SQL Server
 pip install "fabric-schema-drift-detective[postgres]"   # PostgreSQL (RDS/Aurora)
 pip install "fabric-schema-drift-detective[redshift]"   # AWS Redshift
 pip install "fabric-schema-drift-detective[mysql]"      # MySQL / Aurora MySQL
+pip install "fabric-schema-drift-detective[cosmos]"     # Azure Cosmos DB
 ```
 
 ## ⚡ Quickstart — 60 seconds, no Fabric account
@@ -65,7 +66,7 @@ Run the tests and quality gates any time:
 
 ```bash
 pip install -e .[dev]     # pytest, ruff, mypy, bandit + type stubs
-pytest -q                 # 305 tests
+pytest -q                 # 330 tests
 ```
 
 Loads AdventureWorksLT → builds the medallion → snapshots baselines → injects six
@@ -98,7 +99,7 @@ Detection pipeline:
  ├─ FabricBackend (fab CLI + REST)          │
  └─ LocalBackend  (DuckDB + JSON)           ▼
         │ current schemas ────────►  schema_diff  ──►  lineage graph  ──►  Claude
-        │                            (15 drift types)  (cross-layer +   (severity,
+        │                            (17 drift types)  (cross-layer +   (severity,
         ▼                                               cross-workspace  fixes, PR text)
    five LayerSchemas                                    breaks)   │
                                                                   ▼
@@ -166,7 +167,7 @@ Two integration modes — pick per source:
 | **PostgreSQL (RDS/Aurora)** | source | ✅ shipped | `.[postgres]` |
 | **AWS Redshift** | source | ✅ shipped | `.[redshift]` |
 | **MySQL / Aurora MySQL** | source | ✅ shipped | `.[mysql]` |
-| Azure Cosmos DB | source | 🙋 wanted (advanced — schemaless) | — |
+| **Azure Cosmos DB** <sub>(schema inferred by document sampling)</sub> | source | ✅ shipped | `.[cosmos]` |
 
 A new backend is ~100 lines: connection factory + catalog query + type
 map on top of the shared SQL-catalog base, with cross-source **type
@@ -243,7 +244,7 @@ column, a type change, and more) and prints every step above.
 
 ## 🔬 Drift types
 
-Fifteen typed drifts, grouped by the level they hit. Severity is judged by
+Seventeen typed drifts, grouped by the level they hit. Severity is judged by
 whether a change *breaks* consumers or just *risks* them; `auto_fixable` means
 the repair is mechanical (a downstream find/replace), not a business decision.
 
@@ -258,6 +259,8 @@ the repair is mechanical (a downstream find/replace), not a business decision.
 | `column_rename` <sub>(deterministic stable matching: type + position + name similarity, with a reported confidence score)</sub> | 🔴 critical | ✅ | a refactor renames `email→email_address`; every downstream ref breaks but is mechanically remappable |
 | `column_reorder` | 🟡 warning | ✅ | positions swap; breaks `SELECT *` inserts and positional CSV/parquet binding |
 | `nullability_change` | 🟡 warning | ✅ | `NOT NULL→NULL` lets nulls into a column a measure assumes is populated |
+| `default_change` | 🟡 warning | ❌ | `DEFAULT 0 → DEFAULT NULL` silently changes what lands in every new row — data semantics move with no query breaking |
+| `flag_change` | 🟡 warning | ❌ | a column gains/loses `identity`/`computed`/`auto_increment`; inserts break or two systems start generating conflicting values |
 
 **Table-level**
 
@@ -293,9 +296,11 @@ retyping, renaming fields), **Dataflow Gen2 / notebook refactors** silently
 changing the Silver contract, **money-precision narrowing** in financial marts,
 and **semantic-model edits** that move numbers without breaking a query. Drifts
 that need metadata the backends don't yet capture — Delta **partition-column**
-changes, **collation/case-sensitivity**, column **default** changes — are the
-tracked roadmap; the engine's typed, lineage-aware design extends to them
-without touching consumers.
+changes, **collation/case-sensitivity** — are the tracked roadmap; the
+engine's typed, lineage-aware design extends to them without touching
+consumers. (`default_change`/`flag_change` fire wherever a backend captures
+defaults/flags — the simulate backend does; SQL backends opt in by widening
+their catalog query.)
 
 ## 🚀 Usage
 
@@ -411,13 +416,14 @@ credential as Fabric — one app registration, one auth stack (permissions:
 ## ✅ Tests & quality gates
 
 ```bash
-pytest                    # 305 tests: differ (15 drift types), deterministic
+pytest                    # 330 tests: differ (17 drift types), deterministic
                           # rename matching, cross-workspace lineage, baseline
                           # fail-loud policy, REST retry/backoff, git handler
                           # security guards, agents, notifications, lineage
                           # manifest, watch scope, type normalization, and the
                           # backend contract suite (Local/HANA/Snowflake/
-                          # Databricks/SQL Server/Postgres/Redshift/MySQL)
+                          # Databricks/SQL Server/Postgres/Redshift/MySQL/
+                          # Cosmos DB)
 ruff check .              # lint (incl. bugbear + security rules)
 mypy                      # strict-leaning type check, 0 errors
 bandit -c pyproject.toml -r src main.py   # security scan

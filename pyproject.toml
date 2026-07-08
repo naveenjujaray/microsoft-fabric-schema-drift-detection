@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fabric-schema-drift-detective"
-version = "0.1.1"
+version = "0.1.2"
 description = "Autonomous schema-drift detection for Microsoft Fabric medallion architectures, with Claude-powered impact analysis and cross-workspace lineage"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,6 +44,7 @@ sqlserver = ["pyodbc>=5.1.0"]
 postgres = ["psycopg[binary]>=3.1.0"]
 redshift = ["redshift_connector>=2.1.0"]
 mysql = ["mysql-connector-python>=8.4.0"]
+cosmos = ["azure-cosmos>=4.5.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-mock>=3.14.0",

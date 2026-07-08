@@ -113,3 +113,21 @@ def test_roundtrip_serialization(backend):
 
     restored = LayerSchema.from_dict(schema.to_dict())
     assert restored.to_dict() == schema.to_dict()
+
+
+def test_column_defaults_captured(tmp_path):
+    """DuckDB column_default flows into ColumnSchema.default."""
+    import duckdb
+
+    from fabric_drift_detective.backends.base import Layer
+    from fabric_drift_detective.backends.local_backend import LocalBackend
+
+    db = tmp_path / "m.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute("CREATE SCHEMA bronze")
+    con.execute("CREATE TABLE bronze.t (a INT DEFAULT 7, b VARCHAR)")
+    con.close()
+    backend = LocalBackend(db, tmp_path / "sm.json", tmp_path / "r.json")
+    cols = backend.get_schema(Layer.BRONZE).tables["t"].columns
+    assert cols["a"].default == "7"
+    assert cols["b"].default is None

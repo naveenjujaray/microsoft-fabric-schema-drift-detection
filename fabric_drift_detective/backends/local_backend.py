@@ -64,7 +64,7 @@ class LocalBackend(SchemaBackend):
             rows = con.execute(
                 """
                 SELECT table_name, column_name, data_type,
-                       is_nullable, ordinal_position
+                       is_nullable, ordinal_position, column_default
                 FROM information_schema.columns
                 WHERE table_schema = ?
                 ORDER BY table_name, ordinal_position
@@ -76,7 +76,7 @@ class LocalBackend(SchemaBackend):
             con.close()
 
         tables: dict[str, TableSchema] = {}
-        for table_name, col, dtype, nullable, ordinal in rows:
+        for table_name, col, dtype, nullable, ordinal, default in rows:
             table = tables.setdefault(table_name, TableSchema(name=table_name))
             table.columns[col] = ColumnSchema(
                 name=col,
@@ -84,6 +84,7 @@ class LocalBackend(SchemaBackend):
                 nullable=str(nullable).upper() == "YES",
                 ordinal=int(ordinal),
                 is_key=(table_name, col) in keys,
+                default=str(default) if default is not None else None,
             )
         return LayerSchema(layer=layer, tables=tables)
 
