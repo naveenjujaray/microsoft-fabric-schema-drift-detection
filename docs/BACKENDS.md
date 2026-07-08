@@ -151,9 +151,14 @@ Cosmos has no catalog to query, so this backend samples up to
 names become columns, JSON value types map to `bool`/`int`/`float`/
 `string`/`object`/`array`, a field null or missing in any sampled
 document is nullable, and a field with conflicting types across
-documents becomes `mixed`. Ordering is alphabetical and inference is
-deterministic — the same data always snapshots identically. Cosmos
-system properties (`_rid`, `_ts`, …) are stripped.
+documents becomes `mixed` (except `int`+`float`, which fold to `float`
+— JSON writes `2.0` as `2`). A field that is null in *every* sampled
+document is skipped, not guessed: its type is unknowable, and guessing
+would fire a false critical `type_change` when values arrive. Ordering
+is alphabetical and inference is deterministic — the same data always
+snapshots identically. Exactly the Cosmos system properties (`_rid`,
+`_self`, `_etag`, `_attachments`, `_ts`) are stripped; user-defined
+underscore fields are watched like any other.
 
 **Sampling ceiling:** a field rarer than 1/`sample_size` can flap
 between `column_add`/`column_drop` across runs — raise

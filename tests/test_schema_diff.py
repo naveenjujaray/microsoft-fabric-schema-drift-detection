@@ -74,7 +74,19 @@ def test_column_schema_default_flags_roundtrip():
     # baselines written before default/flags existed still load
     legacy = {"name": "x", "dtype": "INT"}
     old = ColumnSchema.from_dict(legacy)
-    assert old.default is None and old.flags == ()
+    assert old.flags == ()
+
+
+def test_legacy_baseline_without_default_capture_never_fires(silver_baseline):
+    """A baseline snapshotted before default capture existed must not
+    storm default_change on upgrade - 'not captured' != 'no default'."""
+    base = _clone(silver_baseline)
+    legacy_dict = base.tables["orders"].columns["freight"].to_dict()
+    del legacy_dict["default"]  # as written by pre-upgrade code
+    base.tables["orders"].columns["freight"] = ColumnSchema.from_dict(legacy_dict)
+    cur = _clone(silver_baseline)
+    _replace_col(cur, "orders", "freight", default="0.0")  # now captured
+    assert diff_layer(base, cur) == []
 
 
 def test_column_drop_is_critical(silver_baseline):

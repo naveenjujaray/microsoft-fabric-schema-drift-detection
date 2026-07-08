@@ -19,7 +19,13 @@ from difflib import SequenceMatcher
 from enum import Enum
 from typing import Any
 
-from .backends.base import ColumnSchema, Layer, LayerSchema, TableSchema
+from .backends.base import (
+    DEFAULT_NOT_CAPTURED,
+    ColumnSchema,
+    Layer,
+    LayerSchema,
+    TableSchema,
+)
 
 
 class DriftType(str, Enum):
@@ -395,9 +401,13 @@ def _diff_table(
                     auto_fixable=False,
                 )
             )
-        if b.default != c.default:
+        if (
+            DEFAULT_NOT_CAPTURED not in (b.default, c.default)
+            and b.default != c.default
+        ):
             # a changed default silently changes what lands in new rows -
-            # data semantics move without any query breaking
+            # data semantics move without any query breaking. Sides from
+            # pre-capture baselines are skipped, not treated as "no default".
             drifts.append(
                 DriftRecord(
                     layer=layer,

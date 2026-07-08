@@ -87,6 +87,50 @@ def test_conflicting_types_become_mixed():
     assert cols["v"].dtype == "mixed"
 
 
+def test_int_and_float_fold_to_float():
+    """JSON serializes 2.0 as 2; a whole-number sample must not flip a
+    numeric field to 'mixed'."""
+    docs = [{"id": "1", "price": 1.5}, {"id": "2", "price": 2}]
+    cols = (
+        _backend(containers={"c": docs})
+        .get_schema(Layer.BRONZE).tables["c"].columns
+    )
+    assert cols["price"].dtype == "float"
+
+
+def test_all_null_field_is_skipped_not_guessed():
+    """A field never seen with a value has an unknowable type; guessing
+    'string' would fire a false CRITICAL type_change when values arrive.
+    Skipping means its later appearance is a benign column_add."""
+    docs = [{"id": "1", "discount": None}, {"id": "2", "discount": None}]
+    cols = (
+        _backend(containers={"c": docs})
+        .get_schema(Layer.BRONZE).tables["c"].columns
+    )
+    assert "discount" not in cols
+    assert "id" in cols
+
+
+def test_user_underscore_fields_kept_only_system_stripped():
+    docs = [{"id": "1", "_sourceSystem": "sap", "_rid": "x", "_etag": "y"}]
+    cols = (
+        _backend(containers={"c": docs})
+        .get_schema(Layer.BRONZE).tables["c"].columns
+    )
+    assert "_sourceSystem" in cols
+    assert "_rid" not in cols and "_etag" not in cols
+
+
+def test_empty_container_logs_warning(caplog):
+    import logging
+
+    backend = _backend(containers={"empty_one": []})
+    with caplog.at_level(logging.WARNING):
+        schema = backend.get_schema(Layer.BRONZE)
+    assert schema.tables["empty_one"].columns == {}  # contract: no crash
+    assert any("empty_one" in r.message for r in caplog.records)
+
+
 def test_ordinals_are_alphabetical_and_deterministic():
     cols = _backend().get_schema(Layer.BRONZE).tables["items"].columns
     ordered = sorted(cols, key=lambda n: cols[n].ordinal)

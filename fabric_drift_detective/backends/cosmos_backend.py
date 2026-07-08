@@ -35,6 +35,7 @@ your documents are heterogeneous.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable
 from itertools import islice
@@ -42,7 +43,13 @@ from typing import Any
 
 from .base import ColumnSchema, Layer, LayerSchema, SchemaBackend, TableSchema
 
+logger = logging.getLogger(__name__)
+
 _ENV_VARS = ("COSMOS_ENDPOINT", "COSMOS_KEY")
+
+#: exact Cosmos system properties - NOT a "_" prefix rule, because
+#: user-defined underscore fields are real contract that must be watched
+_SYSTEM_FIELDS = frozenset({"_rid", "_self", "_etag", "_attachments", "_ts"})
 
 #: JSON scalar -> canonical dtype; bool MUST precede int (bool is an int
 #: subclass in Python)
@@ -122,6 +129,16 @@ class CosmosBackend(SchemaBackend):
                 ),
                 self.sample_size,
             ))
+            if not docs:
+                # zero documents = zero information; every baselined
+                # field will read as a column_drop against this - warn
+                # so a truncated/TTL-purged container is diagnosable
+                logger.warning(
+                    "Cosmos container %r sampled 0 documents - schema is "
+                    "unknowable this run; if the container is not actually "
+                    "empty, expect false column_drop drift until it has data",
+                    name,
+                )
             result.tables[name] = self._infer_table(name, docs)
         return result
 
@@ -133,8 +150,8 @@ class CosmosBackend(SchemaBackend):
         presence: dict[str, int] = {}
         for doc in docs:
             for field, value in doc.items():
-                if field.startswith("_"):
-                    continue  # Cosmos system properties (_rid, _ts, ...)
+                if field in _SYSTEM_FIELDS:
+                    continue
                 presence[field] = presence.get(field, 0) + 1
                 if value is None:
                     null_seen[field] = True
@@ -144,7 +161,14 @@ class CosmosBackend(SchemaBackend):
         table = TableSchema(name=name)
         for ordinal, field in enumerate(sorted(presence)):
             seen = types.get(field, set())
-            dtype = seen.pop() if len(seen) == 1 else ("mixed" if seen else "string")
+            if seen == {"int", "float"}:
+                seen = {"float"}  # JSON writes 2.0 as 2; still one numeric field
+            if not seen:
+                # null in every sampled doc: type unknowable. Guessing
+                # would fire a false CRITICAL type_change when values
+                # arrive; skipping makes that a benign column_add instead.
+                continue
+            dtype = seen.pop() if len(seen) == 1 else "mixed"
             table.columns[field] = ColumnSchema(
                 name=field,
                 dtype=dtype,

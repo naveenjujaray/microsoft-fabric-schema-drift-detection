@@ -25,6 +25,12 @@ class Layer(str, Enum):
     REPORTS = "reports"
 
 
+#: sentinel for baselines snapshotted before default capture existed -
+#: "not captured" must not read as "no default", or the first run after
+#: an upgrade storms default_change for every column with a default
+DEFAULT_NOT_CAPTURED = "__not_captured__"
+
+
 @dataclass(frozen=True)
 class ColumnSchema:
     """A single column's contract.
@@ -63,7 +69,7 @@ class ColumnSchema:
             nullable=d.get("nullable", True),
             ordinal=d.get("ordinal", 0),
             is_key=d.get("is_key", False),
-            default=d.get("default"),
+            default=d.get("default", DEFAULT_NOT_CAPTURED),
             flags=tuple(d.get("flags", ())),
         )
 
